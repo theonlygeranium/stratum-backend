@@ -64,6 +64,8 @@ def evaluate_retrieval(cases: list[dict[str, Any]]) -> dict[str, Any]:
                         "service_area": doc.metadata.get("service_area"),
                         "content_type": doc.metadata.get("content_type"),
                         "score": doc.metadata.get("relevance_score"),
+                        "reranker_provider": doc.metadata.get("reranker_provider"),
+                        "cross_encoder_score": doc.metadata.get("cross_encoder_score"),
                     }
                     for doc in result.docs[:3]
                 ],
@@ -80,6 +82,8 @@ def evaluate_retrieval(cases: list[dict[str, Any]]) -> dict[str, Any]:
         },
         "embedding_provider": retriever.embedding_provider,
         "vector_store_provider": retriever.vector_store_provider,
+        "reranker_provider": retriever.reranker_provider,
+        "reranker_model": retriever.reranker_model,
         "cases": details,
     }
 

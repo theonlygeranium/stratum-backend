@@ -7,7 +7,7 @@ The service is designed for the existing React/Vite frontend on Cloudflare Pages
 - `POST /api/chat` as a Server-Sent Events stream matching the Phase 1 `StreamEvent` union.
 - `GET /api/health` for platform health checks.
 - LangGraph-based routing for open Q&A, intake, about, and escalation modes.
-- Hybrid RAG retrieval with `rank_bm25`, Chroma-backed dense retrieval, RRF fusion, and heuristic reranking.
+- Hybrid RAG retrieval with `rank_bm25`, Chroma-backed dense retrieval, RRF fusion, and configurable reranking.
 - Local deterministic embeddings/generation for development and CI when provider credentials are absent.
 - Optional Resend notification side effects when escalation credentials are configured.
 
@@ -54,6 +54,8 @@ Useful optional variables:
 - `EMBEDDING_MODEL`: default `text-embedding-3-small`.
 - `VECTOR_STORE_PROVIDER`: `chroma` by default, falling back to memory if Chroma is unavailable.
 - `CHROMA_PERSIST_DIR`: optional path for persistent local Chroma storage.
+- `RERANKER_PROVIDER`: `heuristic` for demo/local, or `cohere` to use Cohere's rerank API when `COHERE_API_KEY` is configured.
+- `RERANKER_MODEL`: default `rerank-v4.0-fast`.
 
 ## Verification
 

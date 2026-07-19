@@ -33,6 +33,9 @@ class StratumAgent:
             embedding_api_key=settings.llm_api_key,
             vector_store_provider=settings.vector_store_provider,
             chroma_persist_dir=settings.chroma_persist_dir,
+            reranker_provider=settings.reranker_provider,
+            reranker_model=settings.reranker_model,
+            cohere_api_key=settings.cohere_api_key,
         )
         self.session_store = SessionStore(settings.database_url)
         self.low_confidence_counts = self.session_store.memory_counts

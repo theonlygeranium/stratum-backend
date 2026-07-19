@@ -11,6 +11,7 @@ from rank_bm25 import BM25Okapi
 from app.models import SourceConfidence
 from app.rag.chunker import chunk_documents
 from app.rag.documents import Document, load_knowledge_base
+from app.rag.rerankers import RerankCandidate, build_reranker
 from app.rag.vector_store import DenseVectorIndex, build_embedding_provider
 
 
@@ -205,6 +206,9 @@ class HybridRetriever:
         embedding_api_key: str | None = None,
         vector_store_provider: str = "chroma",
         chroma_persist_dir: Path | None = None,
+        reranker_provider: str = "heuristic",
+        reranker_model: str = "rerank-v4.0-fast",
+        cohere_api_key: str | None = None,
     ):
         docs = load_knowledge_base(knowledge_base_dir)
         self.docs = chunk_documents(docs)
@@ -230,6 +234,13 @@ class HybridRetriever:
         )
         self.embedding_provider = self._vector_index.embedding_provider.name
         self.vector_store_provider = self._vector_index.vector_store_provider
+        self._reranker = build_reranker(
+            provider=reranker_provider,
+            cohere_api_key=cohere_api_key,
+            model=reranker_model,
+        )
+        self.reranker_provider = self._reranker.name
+        self.reranker_model = self._reranker.model
 
     def retrieve(self, query: str, top_k: int = 5) -> RetrievalResult:
         if not self.docs or not query.strip():
@@ -294,26 +305,52 @@ class HybridRetriever:
         fused: list[tuple[int, float]],
         bm25: list[tuple[int, float]],
         semantic: list[tuple[int, float]],
-    ) -> list[tuple[int, float, float, float]]:
+    ) -> list[tuple[int, float, float, float, str, str | None, float | None, float]]:
         if not fused:
             return []
 
         bm25_scores = dict(bm25)
         semantic_scores = dict(semantic)
         max_bm25 = max(bm25_scores.values() or [0.0])
-        reranked: list[tuple[int, float, float, float]] = []
+        candidates: list[RerankCandidate] = []
 
         for index, fused_score in fused:
             bm25_norm = bm25_scores.get(index, 0.0) / max_bm25 if max_bm25 else 0.0
             semantic_score = semantic_scores.get(index, 0.0)
-            relevance = self._relevance_score(
+            heuristic_score = self._relevance_score(
                 query,
                 index,
                 fused_score=fused_score,
                 bm25_score=bm25_norm,
                 semantic_score=semantic_score,
             )
-            reranked.append((index, relevance, fused_score, semantic_score))
+            candidates.append(
+                RerankCandidate(
+                    index=index,
+                    text=self._doc_text[index],
+                    fused_score=fused_score,
+                    bm25_score=bm25_norm,
+                    semantic_score=semantic_score,
+                    heuristic_score=heuristic_score,
+                )
+            )
+
+        candidate_map = {candidate.index: candidate for candidate in candidates}
+        reranked = []
+        for result in self._reranker.rerank(query, candidates):
+            candidate = candidate_map[result.index]
+            reranked.append(
+                (
+                    result.index,
+                    result.score,
+                    candidate.fused_score,
+                    candidate.semantic_score,
+                    result.provider,
+                    result.model,
+                    result.cross_encoder_score,
+                    candidate.heuristic_score,
+                )
+            )
 
         return sorted(reranked, key=lambda item: (-item[1], -item[2], item[0]))
 
@@ -352,15 +389,25 @@ class HybridRetriever:
         relevance_score: float,
         fused_score: float,
         semantic_score: float,
+        reranker_provider: str,
+        reranker_model: str | None,
+        cross_encoder_score: float | None,
+        heuristic_score: float,
     ) -> Document:
         doc = self.docs[index]
         metadata = dict(doc.metadata)
         metadata["relevance_score"] = round(relevance_score, 4)
         metadata["retrieval_score"] = round(fused_score, 4)
         metadata["semantic_score"] = round(semantic_score, 4)
+        metadata["heuristic_score"] = round(heuristic_score, 4)
         metadata["embedding_provider"] = self.embedding_provider
         metadata["embedding_model"] = self.embedding_model
         metadata["vector_store_provider"] = self.vector_store_provider
+        metadata["reranker_provider"] = reranker_provider
+        if reranker_model:
+            metadata["reranker_model"] = reranker_model
+        if cross_encoder_score is not None:
+            metadata["cross_encoder_score"] = round(cross_encoder_score, 4)
         return Document(content=doc.content, metadata=metadata)
 
     def _source_confidence(self, query: str, docs: list[Document]) -> SourceConfidence:

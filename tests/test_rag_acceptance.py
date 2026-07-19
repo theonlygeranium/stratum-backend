@@ -11,3 +11,4 @@ def test_rag_eval_meets_acceptance_thresholds() -> None:
     assert report["retrieval_latency_ms"]["p95"] < 1500
     assert report["embedding_provider"] in {"hash", "openai"}
     assert report["vector_store_provider"] in {"chroma", "memory"}
+    assert report["reranker_provider"] in {"heuristic", "cohere"}
