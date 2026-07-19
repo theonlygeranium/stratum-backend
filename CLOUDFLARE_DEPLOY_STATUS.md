@@ -22,9 +22,9 @@ Checked on 2026-07-19 after the Railway-backed STRATUM deployment.
 
 ## Verification
 
-- Backend test suite: `85 passed, 1 skipped, 2 warnings`
+- Backend test suite: `87 passed, 1 skipped, 2 warnings`
 - Optional Postgres checkpoint smoke: passed locally with `STRATUM_TEST_DATABASE_URL`.
-- RAG acceptance harness: passed locally with Recall@10 `1.0`, groundedness proxy `1.0`, and no-key first-token latency under `1500ms`.
+- RAG acceptance harness: passed locally with Recall@10 `1.0`, groundedness proxy `1.0`, and no-key first-token latency `6.35ms`.
 - Deployed Phase 4 conversation matrix: `54` live turns passed with contract pass rate `1.0`, expected behavior `1.0`, persona consistency `1.0`, no-hallucination proxy `1.0`, snapshot delivery `1.0`, scripted escalation rate `0.2222`, abandonment proxy `0.0`, and first-token latency p95 `1161.58ms`.
 - OpenAI-compatible provider streaming path: covered by parser and progressive-stream contract tests.
 - Docker build: passed with the Railway-compatible `${PORT:-8000}` command.
@@ -37,13 +37,13 @@ Checked on 2026-07-19 after the Railway-backed STRATUM deployment.
 
 ## Remaining Strict Spec Gaps
 
-- LangGraph routing and optional PostgresSaver checkpoint support are implemented, but production checkpoint table creation still needs Railway runtime verification with `DATABASE_URL`.
-- LangGraph topology is compressed into route/open/intake/about/escalation nodes; the spec's explicit `rag`, `assess`, `generate`, and `notify` nodes remain a strict-architecture hardening item.
+- LangGraph routing now exposes the executable spec topology: `route`, `open`, `intake`, `assess`, `about`, `escalation`, `notify`, and shared terminal `generate`; optional PostgresSaver checkpoint support is implemented, but production checkpoint table creation still needs Railway runtime verification with `DATABASE_URL`.
+- Diagram-level `rag`, `persona`, and `handoff` stages remain consolidated into their branch handlers to preserve current behavior and avoid duplicate escalation notifications.
 - Retrieval now uses `rank_bm25`, Chroma-backed dense retrieval, RRF-style fusion, heuristic reranking by default, and an optional Cohere cross-encoder reranker when `RERANKER_PROVIDER=cohere` plus `COHERE_API_KEY` are configured. The demo Railway env does not require Cohere.
 - Acceptance metrics now run locally through `scripts/eval_rag.py` and against Railway through `scripts/eval_deployed_conversations.py`; passive production traffic analytics for real visitor escalation and abandonment remain uninstrumented.
 
 ## Notes
 
-- Railway CLI agent support and the `use-railway` skill are installed. The local CLI is not OAuth-authenticated, but the custom Railway MCP can list the project and check service health.
-- Custom Railway MCP project read confirms project `sunny-ambition`, service `stratum-backend`, Postgres service `postgres`, and environment `production`. Some custom MCP deployment/domain/env-var reads currently fail against Railway GraphQL schema fields.
+- Railway CLI agent support and the `use-railway` skill are installed and up to date. The official local MCP is configured; OAuth login is required for `railway agent`.
+- Custom Railway MCP is configured in Codex as `railway-mcp` with bearer auth via `RAILWAY_CUSTOM_MCP_BEARER_TOKEN`; direct MCP verification returned server `railway_mcp` version `1.28.1` and all `9` tools.
 - Cloudflare credentials remain only in the sensitive handoff attachment and were not committed to this repository.

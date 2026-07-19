@@ -13,6 +13,7 @@ from app.models import (
     EscalationTrigger,
     StratumResult,
 )
+from app.prompts import INTAKE_QUESTIONS
 
 
 try:
@@ -79,6 +80,17 @@ def route_key(state: StratumState) -> ConversationMode:
     if mode not in VALID_ROUTE_KEYS:
         return "open"
     return cast(ConversationMode, mode)
+
+
+def intake_branch_key(state: StratumState) -> str:
+    if state.get("snapshot"):
+        return "complete"
+    answers = state.get("intake_answers") or {}
+    index = state.get("intake_index")
+    safe_index = index if index is not None else 0
+    if len(answers) >= len(INTAKE_QUESTIONS) or safe_index >= len(INTAKE_QUESTIONS):
+        return "complete"
+    return "incomplete"
 
 
 def request_from_state(state: StratumState) -> ChatRequest:
@@ -196,6 +208,9 @@ def build_stratum_graph(
     async def intake_node(state: StratumState) -> dict[str, Any]:
         return _state_from_result(await intake_handler(request_from_state(state)))
 
+    def assess_node(state: StratumState) -> dict[str, Any]:
+        return {"snapshot": state.get("snapshot")}
+
     def about_node(_: StratumState) -> dict[str, Any]:
         return _state_from_result(about_handler())
 
@@ -205,12 +220,26 @@ def build_stratum_graph(
             await escalation_handler(request_from_state(state), trigger)
         )
 
+    def notify_node(state: StratumState) -> dict[str, Any]:
+        return {
+            "escalation_context": {
+                "trigger": state.get("escalation_trigger") or "explicit",
+                "session_id": state["session_id"],
+            }
+        }
+
+    def generate_node(state: StratumState) -> dict[str, Any]:
+        return {"response_text": state.get("response_text", "")}
+
     graph = StateGraph(StratumState)
     graph.add_node("route", route_node)
     graph.add_node("open", open_node)
     graph.add_node("intake", intake_node)
+    graph.add_node("assess", assess_node)
     graph.add_node("about", about_node)
     graph.add_node("escalation", escalation_node)
+    graph.add_node("notify", notify_node)
+    graph.add_node("generate", generate_node)
     graph.add_edge(START, "route")
     graph.add_conditional_edges(
         "route",
@@ -222,8 +251,20 @@ def build_stratum_graph(
             "escalation": "escalation",
         },
     )
-    for node in ("open", "intake", "about", "escalation"):
-        graph.add_edge(node, END)
+    graph.add_edge("open", "generate")
+    graph.add_conditional_edges(
+        "intake",
+        intake_branch_key,
+        {
+            "complete": "assess",
+            "incomplete": "generate",
+        },
+    )
+    graph.add_edge("assess", "generate")
+    graph.add_edge("about", "generate")
+    graph.add_edge("escalation", "notify")
+    graph.add_edge("notify", "generate")
+    graph.add_edge("generate", END)
 
     return StratumGraphRuntime(
         graph=graph,

@@ -15,7 +15,7 @@ from app.graph import (
     route_key,
     route_node,
 )
-from app.models import ChatRequest, SourceConfidence, StratumResult
+from app.models import ChatRequest, ReadinessSnapshot, SourceConfidence, StratumResult
 from app.sse import sse_event
 import app.main as main_module
 
@@ -421,9 +421,42 @@ def test_agent_uses_compiled_langgraph_runtime() -> None:
         "route",
         "open",
         "intake",
+        "assess",
         "about",
         "escalation",
+        "notify",
+        "generate",
     } <= set(compiled.nodes)
+
+
+def test_langgraph_topology_matches_executable_spec() -> None:
+    assert main_module.agent.graph_runtime is not None
+    compiled = main_module.agent.graph_runtime.compiled or asyncio.run(
+        main_module.agent.graph_runtime._compiled_graph()
+    )
+    edges = {
+        (edge.source, edge.target, edge.data, edge.conditional)
+        for edge in compiled.get_graph().edges
+    }
+
+    assert {
+        ("__start__", "route", None, False),
+        ("route", "open", None, True),
+        ("route", "intake", None, True),
+        ("route", "about", None, True),
+        ("route", "escalation", None, True),
+        ("open", "generate", None, False),
+        ("about", "generate", None, False),
+        ("intake", "assess", "complete", True),
+        ("intake", "generate", "incomplete", True),
+        ("assess", "generate", None, False),
+        ("escalation", "notify", None, False),
+        ("notify", "generate", None, False),
+        ("generate", "__end__", None, False),
+    } <= edges
+    assert {
+        edge.source for edge in compiled.get_graph().edges if edge.target == "__end__"
+    } == {"generate"}
 
 
 def test_graph_runtime_lazily_compiles_checkpointer(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -466,6 +499,106 @@ def test_graph_runtime_lazily_compiles_checkpointer(monkeypatch: pytest.MonkeyPa
     assert result.response_text == "ok"
     assert runtime.compiled is not None
     assert runtime.checkpointer_name == "postgres"
+
+
+def test_graph_adapter_nodes_preserve_single_handler_calls(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from langgraph.checkpoint.memory import MemorySaver
+
+    async def fake_make_checkpointer(database_url: str | None):
+        assert database_url is None
+        return MemorySaver(), "memory", None
+
+    calls = {"open": 0, "intake": 0, "about": 0, "escalation": 0}
+
+    async def open_handler(_: ChatRequest) -> StratumResult:
+        calls["open"] += 1
+        return StratumResult(phases=["composing"], response_text="open-ok")
+
+    async def intake_handler(request: ChatRequest) -> StratumResult:
+        calls["intake"] += 1
+        if request.intake_index is not None and request.intake_index >= 7:
+            return StratumResult(
+                phases=["assessing", "composing"],
+                response_text="snapshot-ok",
+                snapshot=ReadinessSnapshot(
+                    situation="situation",
+                    capabilities="capabilities",
+                    firstStep="first step",
+                ),
+                escalate="high_intent",
+            )
+        return StratumResult(phases=["assessing", "composing"], response_text="next-ok")
+
+    def about_handler() -> StratumResult:
+        calls["about"] += 1
+        return StratumResult(phases=["composing"], response_text="about-ok")
+
+    async def escalation_handler(
+        request: ChatRequest,
+        trigger: str,
+    ) -> StratumResult:
+        calls["escalation"] += 1
+        assert trigger in {"explicit", "sentiment"}
+        return StratumResult(
+            phases=["escalating", "composing"],
+            response_text=f"escalation-{request.mode}-{trigger}",
+            escalate=trigger,
+        )
+
+    monkeypatch.setattr("app.graph._make_checkpointer", fake_make_checkpointer)
+    runtime = build_stratum_graph(
+        database_url=None,
+        open_handler=open_handler,
+        intake_handler=intake_handler,
+        about_handler=about_handler,
+        escalation_handler=escalation_handler,
+    )
+    assert runtime is not None
+
+    def payload(
+        mode: str,
+        session_id: str,
+        *,
+        content: str = "Hello",
+        intake_index: int | None = None,
+    ) -> ChatRequest:
+        return ChatRequest.model_validate(
+            {
+                "messages": [{"role": "user", "content": content, "timestamp": 0}],
+                "mode": mode,
+                "intakeIndex": intake_index,
+                "intakeAnswers": {},
+                "sessionId": session_id,
+            }
+        )
+
+    open_result = asyncio.run(runtime.respond(payload("open", "graph-open")))
+    about_result = asyncio.run(runtime.respond(payload("about", "graph-about")))
+    incomplete_result = asyncio.run(
+        runtime.respond(payload("intake", "graph-intake-incomplete", intake_index=1))
+    )
+    complete_result = asyncio.run(
+        runtime.respond(payload("intake", "graph-intake-complete", intake_index=7))
+    )
+    escalation_result = asyncio.run(
+        runtime.respond(
+            payload(
+                "open",
+                "graph-escalation",
+                content="This is useless.",
+            )
+        )
+    )
+
+    assert open_result.response_text == "open-ok"
+    assert about_result.response_text == "about-ok"
+    assert incomplete_result.response_text == "next-ok"
+    assert complete_result.response_text == "snapshot-ok"
+    assert complete_result.escalate == "high_intent"
+    assert escalation_result.response_text == "escalation-open-sentiment"
+    assert calls == {"open": 1, "intake": 2, "about": 1, "escalation": 1}
 
 
 @pytest.mark.skipif(
