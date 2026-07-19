@@ -30,6 +30,7 @@ echo "Frontend root: ${FRONTEND_ROOT}"
 echo
 
 [[ -f "${ROOT}/Dockerfile" ]] && ok "Dockerfile present for Railway/Fly style deploys." || blocked "Dockerfile is missing."
+[[ -f "${ROOT}/railway.json" ]] && ok "Root Railway deploy config present." || blocked "railway.json is missing from the backend root."
 [[ -f "${ROOT}/deploy/railway.json" ]] && ok "Railway deploy template present." || blocked "deploy/railway.json is missing."
 [[ -f "${ROOT}/deploy/fly.toml" ]] && ok "Fly deploy template present." || blocked "deploy/fly.toml is missing."
 [[ -f "${ROOT}/app/main.py" ]] && ok "FastAPI app source present." || blocked "FastAPI app source is missing."
@@ -57,6 +58,11 @@ fi
 
 echo
 railway_cli=0
+if ! command -v railway >/dev/null 2>&1 && [[ -f "${HOME}/.railway/env" ]]; then
+  # shellcheck disable=SC1091
+  source "${HOME}/.railway/env"
+fi
+
 if command -v railway >/dev/null 2>&1; then
   railway_cli=1
   ok "railway CLI is installed."
@@ -72,13 +78,23 @@ else
   warn "flyctl CLI is not installed in this environment."
 fi
 
-if [[ "${railway_cli}" -eq 1 ]] && has_env RAILWAY_TOKEN; then
-  ok "Railway deploy path has CLI and RAILWAY_TOKEN."
+if [[ "${railway_cli}" -eq 1 ]] && has_env RAILWAY_API_TOKEN; then
+  ok "Railway deploy path has CLI and RAILWAY_API_TOKEN for project creation."
+elif [[ "${railway_cli}" -eq 1 ]] && has_env RAILWAY_TOKEN; then
+  ok "Railway deploy path has CLI and project-scoped RAILWAY_TOKEN."
 elif [[ "${fly_cli}" -eq 1 ]] && has_env FLY_API_TOKEN; then
   ok "Fly deploy path has CLI and FLY_API_TOKEN."
 else
-  blocked "No deploy-ready Railway/Fly path is available. Railway needs railway plus RAILWAY_TOKEN; Fly needs flyctl plus FLY_API_TOKEN."
+  blocked "No deploy-ready Railway/Fly path is available. New Railway project creation needs railway plus RAILWAY_API_TOKEN or interactive login; existing project deploys can use RAILWAY_TOKEN."
 fi
+
+for required in OPENAI_API_KEY DATABASE_URL ALLOWED_ORIGINS RESEND_API_KEY JEFFREY_EMAIL; do
+  if has_env "${required}"; then
+    ok "Required backend variable ${required} is present in the shell."
+  else
+    blocked "Required backend variable ${required} is missing from the shell."
+  fi
+done
 
 echo
 if [[ -d "${FRONTEND_ROOT}" ]]; then

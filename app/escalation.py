@@ -88,11 +88,16 @@ def last_user_text(messages: list[ChatMessage]) -> str:
 
 def detect_direct_trigger(text: str) -> str | None:
     lowered = text.lower()
-    if any(keyword in lowered for keyword in EXPLICIT_KEYWORDS):
+    if any(_contains_keyword(lowered, keyword) for keyword in EXPLICIT_KEYWORDS):
         return "explicit"
-    if any(keyword in lowered for keyword in FRUSTRATION_KEYWORDS):
+    if any(_contains_keyword(lowered, keyword) for keyword in FRUSTRATION_KEYWORDS):
         return "sentiment"
     return None
+
+
+def _contains_keyword(text: str, keyword: str) -> bool:
+    pattern = rf"(?<!\w){re.escape(keyword)}(?!\w)"
+    return re.search(pattern, text) is not None
 
 
 def detect_high_intent(request: ChatRequest) -> bool:
