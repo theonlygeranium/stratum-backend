@@ -14,12 +14,17 @@ async def generate_response(
     conversation_history: list[dict[str, str]],
     query: str,
 ) -> str | None:
-    """Call OpenAI Chat Completions with RAG context.
+    """Call an OpenAI-compatible Chat Completions endpoint with RAG context.
+
+    Works with any provider that matches the OpenAI response format
+    (choices[0].message.content), including OpenAI itself and WRITER
+    Palmyra (api.writer.com/v1/chat). The endpoint, key, and model
+    are all configurable via Settings / environment variables.
 
     Returns the generated text or None when the API key is absent
     or the request fails. Callers must provide a fallback.
     """
-    if not settings.openai_api_key:
+    if not settings.llm_api_key:
         return None
 
     messages: list[dict[str, str]] = [{"role": "system", "content": system_prompt}]
@@ -50,9 +55,9 @@ async def generate_response(
     try:
         async with httpx.AsyncClient(timeout=30) as client:
             response = await client.post(
-                "https://api.openai.com/v1/chat/completions",
+                settings.llm_base_url,
                 headers={
-                    "Authorization": f"Bearer {settings.openai_api_key}",
+                    "Authorization": f"Bearer {settings.llm_api_key}",
                     "Content-Type": "application/json",
                 },
                 json={

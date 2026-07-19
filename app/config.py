@@ -16,7 +16,8 @@ class Settings:
     calendly_url: str
     knowledge_base_dir: Path
     escalation_log_dir: Path
-    openai_api_key: str | None
+    llm_api_key: str | None
+    llm_base_url: str
     llm_model: str
     resend_api_key: str | None
     jeffrey_email: str | None
@@ -44,9 +45,21 @@ def get_settings() -> Settings:
         ),
         knowledge_base_dir=kb_dir,
         escalation_log_dir=log_dir,
-        openai_api_key=os.getenv("OPENAI_API_KEY") or None,
+        # LLM provider — configurable via env vars.
+        # Defaults to OpenAI (api.openai.com / gpt-4o).
+        # Set LLM_API_KEY + LLM_BASE_URL + LLM_MODEL to swap to
+        # WRITER Palmyra or any OpenAI-compatible endpoint.
+        # Backward compat: OPENAI_API_KEY is still read if LLM_API_KEY
+        # is absent.
+        llm_api_key=(
+            os.getenv("LLM_API_KEY")
+            or os.getenv("OPENAI_API_KEY")
+            or None
+        ),
+        llm_base_url=os.getenv(
+            "LLM_BASE_URL", "https://api.openai.com/v1/chat/completions"
+        ),
         llm_model=os.getenv("LLM_MODEL", "gpt-4o"),
         resend_api_key=os.getenv("RESEND_API_KEY") or None,
         jeffrey_email=os.getenv("JEFFREY_EMAIL") or None,
     )
-
