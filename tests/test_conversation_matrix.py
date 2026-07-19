@@ -288,6 +288,9 @@ def test_representative_conversation_matrix(scenario: dict[str, Any]) -> None:
 
     if scenario["mode"] == "open" and "escalate" not in scenario:
         assert any(event["type"] == "token" for event in events)
+        if scenario["name"] != "out-of-scope":
+            source = next(event["source"] for event in events if event["type"] == "source")
+            assert source["grounded"] is True
     if scenario["mode"] == "about":
         assert all(event["type"] != "source" for event in events)
     if scenario["mode"] == "intake":
