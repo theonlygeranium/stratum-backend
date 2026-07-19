@@ -19,6 +19,7 @@ from app.prompts import (
     SCOPE_BOUNDARY_MESSAGE,
 )
 from app.rag import HybridRetriever
+from app.session_store import SessionStore
 
 
 class StratumAgent:
@@ -28,7 +29,8 @@ class StratumAgent:
             settings.knowledge_base_dir,
             confidence_threshold=settings.confidence_threshold,
         )
-        self.low_confidence_counts: dict[str, int] = {}
+        self.session_store = SessionStore(settings.database_url)
+        self.low_confidence_counts = self.session_store.memory_counts
 
     async def respond(self, request: ChatRequest) -> StratumResult:
         text = last_user_text(request.messages)
@@ -53,8 +55,8 @@ class StratumAgent:
 
         retrieval = self.retriever.retrieve(query)
         if not retrieval.source.grounded:
-            count = self.low_confidence_counts.get(request.session_id, 0) + 1
-            self.low_confidence_counts[request.session_id] = count
+            count = await self.session_store.get_low_confidence_count(request.session_id) + 1
+            await self.session_store.set_low_confidence_count(request.session_id, count)
             if count >= 2:
                 result = await self._escalate(request, "confidence")
                 result.phases = ["searching", "retrieving", "escalating"]
@@ -71,7 +73,7 @@ class StratumAgent:
                 ),
             )
 
-        self.low_confidence_counts[request.session_id] = 0
+        await self.session_store.set_low_confidence_count(request.session_id, 0)
         context = "\n\n".join(doc.content for doc in retrieval.docs[:3])
         response = await self._grounded_response(query, retrieval.source, context, request)
         return StratumResult(

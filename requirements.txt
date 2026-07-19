@@ -4,6 +4,7 @@ pydantic>=2.8,<3
 python-dotenv>=1.0,<2
 httpx>=0.27,<1
 pytest>=8,<9
+psycopg[binary]>=3.2,<4
 
 # Spec-aligned production dependencies. The current implementation degrades
 # gracefully when these are absent, but production installs should keep them.
@@ -14,4 +15,3 @@ langchain-openai>=0.2
 rank-bm25>=0.2.2
 chromadb>=0.5
 resend>=2
-

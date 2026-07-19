@@ -72,6 +72,7 @@ FRUSTRATION_KEYWORDS = [
     "this is not helping",
     "not helpful",
     "you don't understand",
+    "you do not understand",
     "i already told you",
     "forget it",
     "this is useless",

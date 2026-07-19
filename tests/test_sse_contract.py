@@ -15,7 +15,11 @@ import app.main as main_module
 @pytest.fixture(autouse=True)
 def _isolate_agent_state(tmp_path):
     main_module.agent.low_confidence_counts.clear()
+    main_module.agent.session_store.database_url = None
+    main_module.agent.session_store._db_disabled = True
     object.__setattr__(main_module.agent.settings, "escalation_log_dir", tmp_path)
+    object.__setattr__(main_module.agent.settings, "resend_api_key", None)
+    object.__setattr__(main_module.agent.settings, "jeffrey_email", None)
 
 
 client = TestClient(main_module.app)

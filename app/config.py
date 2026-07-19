@@ -16,6 +16,7 @@ class Settings:
     calendly_url: str
     knowledge_base_dir: Path
     escalation_log_dir: Path
+    database_url: str | None
     llm_api_key: str | None
     llm_base_url: str
     llm_model: str
@@ -39,12 +40,13 @@ def get_settings() -> Settings:
 
     return Settings(
         allowed_origins=_split_csv(origins),
-        confidence_threshold=float(os.getenv("CONFIDENCE_THRESHOLD", "0.40")),
+        confidence_threshold=float(os.getenv("CONFIDENCE_THRESHOLD", "0.55")),
         calendly_url=os.getenv(
             "CALENDLY_URL", "https://calendly.com/edstratumlabs/discovery"
         ),
         knowledge_base_dir=kb_dir,
         escalation_log_dir=log_dir,
+        database_url=os.getenv("DATABASE_URL") or None,
         # LLM provider — configurable via env vars.
         # Defaults to OpenAI (api.openai.com / gpt-4o).
         # Set LLM_API_KEY + LLM_BASE_URL + LLM_MODEL to swap to
