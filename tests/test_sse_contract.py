@@ -126,6 +126,55 @@ def test_open_mode_emits_required_sse_order() -> None:
     assert any(event.get("type") == "token" for event in events)
 
 
+def test_agent_stream_reaches_source_before_llm_tokens(monkeypatch) -> None:
+    async def slow_llm_stream(*args, **kwargs):
+        await asyncio.sleep(0)
+        yield "streamed token"
+
+    monkeypatch.setattr(
+        main_module.agent,
+        "_stream_grounded_response",
+        slow_llm_stream,
+    )
+    request = ChatRequest.model_validate(
+        {
+            "messages": [
+                {
+                    "role": "user",
+                    "content": "Does AI make sense for my Canvas environment?",
+                    "timestamp": 0,
+                }
+            ],
+            "mode": "open",
+            "intakeIndex": None,
+            "intakeAnswers": {},
+            "sessionId": "contract-progressive-stream",
+        }
+    )
+
+    async def collect_prefix() -> list[dict]:
+        events = []
+        async for event in main_module.agent.stream(request):
+            events.append(event.model_dump(mode="json"))
+            if len(events) == 4:
+                break
+        return events
+
+    events = asyncio.run(collect_prefix())
+
+    assert [event["type"] for event in events] == [
+        "phase",
+        "phase",
+        "phase",
+        "source",
+    ]
+    assert [event.get("phase") for event in events[:3]] == [
+        "searching",
+        "retrieving",
+        "composing",
+    ]
+
+
 def test_chat_stream_uses_sse_headers() -> None:
     response = client.post(
         "/api/chat",

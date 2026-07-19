@@ -9,7 +9,7 @@ from fastapi.responses import StreamingResponse
 from app.agent import StratumAgent
 from app.config import get_settings
 from app.models import ChatRequest, ErrorEvent, HealthResponse
-from app.sse import sse_event, stream_events
+from app.sse import sse_event
 
 settings = get_settings()
 agent = StratumAgent(settings)
@@ -53,8 +53,7 @@ async def health() -> HealthResponse:
 async def chat(request: ChatRequest) -> StreamingResponse:
     async def stream() -> AsyncGenerator[str, None]:
         try:
-            result = await agent.respond(request)
-            for event in stream_events(result):
+            async for event in agent.stream(request):
                 yield sse_event(event)
         except Exception:
             yield sse_event(

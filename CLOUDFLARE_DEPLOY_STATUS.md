@@ -22,9 +22,10 @@ Checked on 2026-07-19 after the Railway-backed STRATUM deployment.
 
 ## Verification
 
-- Backend test suite: `80 passed, 1 skipped, 2 warnings`
+- Backend test suite: `82 passed, 1 skipped, 2 warnings`
 - Optional Postgres checkpoint smoke: passed locally with `STRATUM_TEST_DATABASE_URL`.
 - RAG acceptance harness: passed locally with Recall@10 `1.0`, groundedness proxy `1.0`, and no-key first-token latency under `1500ms`.
+- OpenAI-compatible provider streaming path: covered by parser and progressive-stream contract tests.
 - Docker build: passed with the Railway-compatible `${PORT:-8000}` command.
 - Secret/token scan: no matches in tracked backend source.
 - Live backend SSE smoke test: passed for open/about/escalation paths.
@@ -34,7 +35,7 @@ Checked on 2026-07-19 after the Railway-backed STRATUM deployment.
 
 ## Remaining Strict Spec Gaps
 
-- The backend emits valid SSE chunks, but model/provider streaming is not wired end to end; responses are composed first and then emitted as token chunks.
+- Production provider first-token latency now uses streaming, but the `<1500ms` target still needs repeated live measurement across representative prompts and cold/warm service states.
 - LangGraph routing and optional PostgresSaver checkpoint support are implemented, but production checkpoint table creation still needs Railway runtime verification with `DATABASE_URL`.
 - Retrieval now uses `rank_bm25`, Chroma-backed dense retrieval, RRF-style fusion, heuristic reranking by default, and an optional Cohere cross-encoder reranker when `RERANKER_PROVIDER=cohere` plus `COHERE_API_KEY` are configured.
 - Acceptance metrics now run locally through `scripts/eval_rag.py`; production traffic metrics such as escalation rate and abandonment are not yet measured.

@@ -8,6 +8,7 @@ The service is designed for the existing React/Vite frontend on Cloudflare Pages
 - `GET /api/health` for platform health checks.
 - LangGraph-based routing for open Q&A, intake, about, and escalation modes.
 - Hybrid RAG retrieval with `rank_bm25`, Chroma-backed dense retrieval, RRF fusion, and configurable reranking.
+- OpenAI-compatible provider streaming for grounded answers, with deterministic fallback token streaming when provider credentials are absent.
 - Local deterministic embeddings/generation for development and CI when provider credentials are absent.
 - Optional Resend notification side effects when escalation credentials are configured.
 

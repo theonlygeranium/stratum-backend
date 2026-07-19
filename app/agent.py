@@ -1,15 +1,28 @@
 from __future__ import annotations
 
+from collections.abc import AsyncGenerator
+
 from app.config import Settings
 from app.escalation import (
     build_payload,
     detect_high_intent,
+    detect_direct_trigger,
     last_user_text,
     send_or_log_escalation,
 )
 from app.graph import build_stratum_graph, procedural_fallback
-from app.llm import generate_response
-from app.models import ChatRequest, ReadinessSnapshot, SourceConfidence, StratumResult
+from app.llm import generate_response, stream_response
+from app.models import (
+    ChatRequest,
+    DoneEvent,
+    PhaseEvent,
+    ReadinessSnapshot,
+    SourceConfidence,
+    SourceEvent,
+    StratumResult,
+    StreamEvent,
+    TokenEvent,
+)
 from app.prompts import (
     CONFIDENCE_ESCALATION_MESSAGE,
     ESCALATION_SLA_MESSAGE,
@@ -20,6 +33,7 @@ from app.prompts import (
 )
 from app.rag import HybridRetriever
 from app.session_store import SessionStore
+from app.sse import token_chunks
 
 
 class StratumAgent:
@@ -57,6 +71,130 @@ class StratumAgent:
             about_handler=self._about,
             escalation_handler=self._escalate,
         )
+
+    async def stream(self, request: ChatRequest) -> AsyncGenerator[StreamEvent, None]:
+        query = last_user_text(request.messages)
+        direct_trigger = detect_direct_trigger(query)
+        if direct_trigger or request.mode == "escalation":
+            async for event in self._stream_escalation(
+                request,
+                direct_trigger or "explicit",
+            ):
+                yield event
+            return
+
+        if request.mode == "intake":
+            async for event in self._stream_result(await self._intake(request)):
+                yield event
+            return
+
+        if request.mode == "about":
+            async for event in self._stream_result(self._about()):
+                yield event
+            return
+
+        async for event in self._stream_open(request):
+            yield event
+
+    async def _stream_open(
+        self,
+        request: ChatRequest,
+    ) -> AsyncGenerator[StreamEvent, None]:
+        query = last_user_text(request.messages)
+        yield PhaseEvent(type="phase", phase="searching")
+
+        if self._is_out_of_scope(query):
+            yield PhaseEvent(type="phase", phase="composing")
+            source = SourceConfidence(label="", score=0.0, grounded=False)
+            yield SourceEvent(type="source", source=source)
+            async for event in self._stream_text(SCOPE_BOUNDARY_MESSAGE):
+                yield event
+            yield DoneEvent(type="done")
+            return
+
+        yield PhaseEvent(type="phase", phase="retrieving")
+        retrieval = self.retriever.retrieve(query)
+
+        if not retrieval.source.grounded:
+            count = await self.session_store.get_low_confidence_count(
+                request.session_id
+            ) + 1
+            await self.session_store.set_low_confidence_count(request.session_id, count)
+            if count >= 2:
+                yield PhaseEvent(type="phase", phase="escalating")
+                await self._notify_only(request, "confidence", None)
+                yield SourceEvent(type="source", source=retrieval.source)
+                async for event in self._stream_text(
+                    self._handoff_message(request, "confidence")
+                ):
+                    yield event
+                yield DoneEvent(type="done", escalate="confidence")
+                return
+
+            yield PhaseEvent(type="phase", phase="composing")
+            yield SourceEvent(type="source", source=retrieval.source)
+            async for event in self._stream_text(
+                f"{CONFIDENCE_ESCALATION_MESSAGE} I do not have a strong enough "
+                "source in the EdStratum knowledge base to answer that confidently. "
+                f"If you'd like to discuss this with Jeffrey, you can book a call here: "
+                f"{self.settings.calendly_url}"
+            ):
+                yield event
+            yield DoneEvent(type="done")
+            return
+
+        await self.session_store.set_low_confidence_count(request.session_id, 0)
+        yield PhaseEvent(type="phase", phase="composing")
+        yield SourceEvent(type="source", source=retrieval.source)
+        context = "\n\n".join(doc.content for doc in retrieval.docs[:3])
+
+        streamed = False
+        async for token in self._stream_grounded_response(
+            query,
+            retrieval.source,
+            context,
+            request,
+        ):
+            streamed = True
+            yield TokenEvent(type="token", token=token)
+
+        if not streamed:
+            response = self._context_fallback(query, retrieval.source, context)
+            async for event in self._stream_text(response):
+                yield event
+
+        yield DoneEvent(type="done")
+
+    async def _stream_escalation(
+        self,
+        request: ChatRequest,
+        trigger: str,
+    ) -> AsyncGenerator[StreamEvent, None]:
+        yield PhaseEvent(type="phase", phase="escalating")
+        await self._notify_only(request, trigger, None)
+        async for event in self._stream_text(self._handoff_message(request, trigger)):
+            yield event
+        yield DoneEvent(type="done", escalate=trigger)  # type: ignore[arg-type]
+
+    async def _stream_result(
+        self,
+        result: StratumResult,
+    ) -> AsyncGenerator[StreamEvent, None]:
+        for phase in result.phases:
+            yield PhaseEvent(type="phase", phase=phase)
+        if result.source is not None:
+            yield SourceEvent(type="source", source=result.source)
+        async for event in self._stream_text(result.response_text):
+            yield event
+        yield DoneEvent(
+            type="done",
+            snapshot=result.snapshot,
+            escalate=result.escalate,
+        )
+
+    async def _stream_text(self, text: str) -> AsyncGenerator[TokenEvent, None]:
+        for token in token_chunks(text):
+            yield TokenEvent(type="token", token=token)
 
     async def _open(self, request: ChatRequest) -> StratumResult:
         query = last_user_text(request.messages)
@@ -250,6 +388,31 @@ class StratumAgent:
         # Fallback: summarize the retrieved context directly.
         # This is used only when the LLM is unavailable.
         return self._context_fallback(query, source, context)
+
+    async def _stream_grounded_response(
+        self,
+        query: str,
+        source: SourceConfidence,
+        context: str,
+        request: ChatRequest,
+    ) -> AsyncGenerator[str, None]:
+        del source
+        conversation_history = [
+            {"role": msg.role, "content": msg.content}
+            for msg in request.messages
+            if msg.role in ("user", "assistant") and msg.content
+        ]
+        system_prompt = RAG_SYSTEM_PROMPT.format(
+            calendar_url=self.settings.calendly_url
+        )
+        async for token in stream_response(
+            self.settings,
+            system_prompt,
+            context,
+            conversation_history,
+            query,
+        ):
+            yield token
 
     def _context_fallback(
         self,
