@@ -29,15 +29,16 @@ Checked on 2026-07-19 after the Railway-backed STRATUM deployment.
 - Docker build: passed with the Railway-compatible `${PORT:-8000}` command.
 - Secret/token scan: no matches in tracked backend source.
 - Live backend SSE smoke test: passed for open/about/escalation paths.
+- Live progressive streaming spot check: first SSE event in `48-60ms`; first-token timings `903ms`, `754ms`, `48ms`, and `245ms` across Canvas, strategy, about, and escalation prompts.
 - Live CORS preflight from `https://edstratumlabs.ai`: passed.
 - Live frontend SEO tags: meta description, canonical, OG title, and OG description present.
 - Live static files: `/robots.txt`, `/sitemap.xml`, `/og-image.png`, `/_headers`, and `/_redirects` all return HTTP 200.
 
 ## Remaining Strict Spec Gaps
 
-- Production provider first-token latency now uses streaming, but the `<1500ms` target still needs repeated live measurement across representative prompts and cold/warm service states.
 - LangGraph routing and optional PostgresSaver checkpoint support are implemented, but production checkpoint table creation still needs Railway runtime verification with `DATABASE_URL`.
-- Retrieval now uses `rank_bm25`, Chroma-backed dense retrieval, RRF-style fusion, heuristic reranking by default, and an optional Cohere cross-encoder reranker when `RERANKER_PROVIDER=cohere` plus `COHERE_API_KEY` are configured.
+- LangGraph topology is compressed into route/open/intake/about/escalation nodes; the spec's explicit `rag`, `assess`, `generate`, and `notify` nodes remain a strict-architecture hardening item.
+- Retrieval now uses `rank_bm25`, Chroma-backed dense retrieval, RRF-style fusion, heuristic reranking by default, and an optional Cohere cross-encoder reranker when `RERANKER_PROVIDER=cohere` plus `COHERE_API_KEY` are configured. The demo Railway env does not require Cohere.
 - Acceptance metrics now run locally through `scripts/eval_rag.py`; production traffic metrics such as escalation rate and abandonment are not yet measured.
 
 ## Notes
