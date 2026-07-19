@@ -179,19 +179,24 @@ async def send_or_log_escalation(
     if not settings.resend_api_key or not settings.jeffrey_email:
         return False
 
-    async with httpx.AsyncClient(timeout=10) as client:
-        response = await client.post(
-            "https://api.resend.com/emails",
-            headers={
-                "Authorization": f"Bearer {settings.resend_api_key}",
-                "Content-Type": "application/json",
-            },
-            json={
-                "from": "stratum@edstratumlabs.ai",
-                "to": [settings.jeffrey_email],
-                "subject": f"STRATUM Escalation - {payload['escalation_trigger'].title()} Trigger",
-                "html": format_email_html(payload),
-            },
-        )
-        response.raise_for_status()
-    return True
+    try:
+        async with httpx.AsyncClient(timeout=10) as client:
+            response = await client.post(
+                "https://api.resend.com/emails",
+                headers={
+                    "Authorization": f"Bearer {settings.resend_api_key}",
+                    "Content-Type": "application/json",
+                },
+                json={
+                    "from": "stratum@edstratumlabs.ai",
+                    "to": [settings.jeffrey_email],
+                    "subject": f"STRATUM Escalation - {payload['escalation_trigger'].title()} Trigger",
+                    "html": format_email_html(payload),
+                },
+            )
+            response.raise_for_status()
+        return True
+    except Exception:
+        # Email notification failed, but the escalation was already logged
+        # to disk above. Do not crash the user-facing response.
+        return False
