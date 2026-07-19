@@ -8,12 +8,14 @@ from app.escalation import (
     last_user_text,
     send_or_log_escalation,
 )
+from app.llm import generate_response
 from app.models import ChatRequest, ReadinessSnapshot, SourceConfidence, StratumResult
 from app.prompts import (
     CONFIDENCE_ESCALATION_MESSAGE,
     ESCALATION_SLA_MESSAGE,
     HIGH_INTENT_ESCALATION_MESSAGE,
     INTAKE_QUESTIONS,
+    RAG_SYSTEM_PROMPT,
     SCOPE_BOUNDARY_MESSAGE,
 )
 from app.rag import HybridRetriever
@@ -69,7 +71,7 @@ class StratumAgent:
 
         self.low_confidence_counts[request.session_id] = 0
         context = "\n\n".join(doc.content for doc in retrieval.docs[:3])
-        response = self._grounded_response(query, retrieval.source, context)
+        response = await self._grounded_response(query, retrieval.source, context, request)
         return StratumResult(
             phases=["searching", "retrieving", "composing"],
             source=retrieval.source,
@@ -190,42 +192,64 @@ class StratumAgent:
             ),
         )
 
-    def _grounded_response(
+    async def _grounded_response(
+        self,
+        query: str,
+        source: SourceConfidence,
+        context: str,
+        request: ChatRequest,
+    ) -> str:
+        """Generate a grounded response using the LLM, with a fallback.
+
+        The LLM receives the retrieved context and recent conversation history
+        so it can answer naturally and reference prior turns. If the LLM call
+        fails or no API key is configured, we fall back to a concise summary
+        of the retrieved context rather than a keyword-matched template.
+        """
+        conversation_history = [
+            {"role": msg.role, "content": msg.content}
+            for msg in request.messages
+            if msg.role in ("user", "assistant") and msg.content
+        ]
+
+        llm_response = await generate_response(
+            self.settings,
+            RAG_SYSTEM_PROMPT,
+            context,
+            conversation_history,
+            query,
+        )
+
+        if llm_response:
+            return llm_response
+
+        # Fallback: summarize the retrieved context directly.
+        # This is used only when the LLM is unavailable.
+        return self._context_fallback(query, source, context)
+
+    def _context_fallback(
         self,
         query: str,
         source: SourceConfidence,
         context: str,
     ) -> str:
-        lowered = query.lower()
-        if "canvas" in lowered or "lti" in lowered:
-            return (
-                f"Based on {source.label}, AI can make sense in a Canvas environment when "
-                "there is a specific workflow to improve, such as LTI tool development, "
-                "gradebook automation, roster sync, analytics, or Canvas Data pipelines. "
-                "The first question is not whether AI is interesting; it is whether the "
-                "Canvas data, permissions, and user workflow are stable enough to support "
-                "a maintainable implementation."
-            )
-        if "strategy" in lowered or "roadmap" in lowered or "roi" in lowered:
-            return (
-                f"Based on {source.label}, we would separate AI strategy from implementation. "
-                "Strategy defines the measurable use case, risk boundary, build-versus-buy "
-                "decision, and evaluation method. Implementation begins only after that "
-                "shape is clear enough to avoid expensive experimentation without evidence."
-            )
-        if "rag" in lowered or "retrieval" in lowered:
-            return (
-                f"Based on {source.label}, a useful RAG system needs curated source content, "
-                "metadata, hybrid retrieval, reranking, evaluation questions, and a clear "
-                "low-confidence behavior. STRATUM uses the same principle: grounded answers "
-                "when context is present, explicit uncertainty when it is not."
-            )
-        return (
-            f"Based on {source.label}, EdStratum is strongest when the engagement has a "
-            "defined operational problem, a data or platform layer that can be inspected, "
-            "and a measurable first release. The practical next step is to name the workflow, "
-            "the users affected, and what evidence would prove the AI system is helping."
-        )
+        """Produce a readable answer from retrieved context when the LLM is down.
+
+        Extracts the first substantive paragraph from the context and presents
+        it with the source attribution. This is a degraded mode — not as good
+        as the LLM response, but far better than the old keyword-matched templates.
+        """
+        # Take the first 400 chars of the context as the answer body
+        body = context.strip()
+        if len(body) > 400:
+            # Cut at the last sentence boundary within 400 chars
+            cut = body[:400].rsplit(".", 1)
+            if len(cut) == 2:
+                body = cut[0] + "."
+            else:
+                body = body[:400].rstrip() + "…"
+
+        return f"Based on {source.label}:\n\n{body}"
 
     @staticmethod
     def _is_out_of_scope(query: str) -> bool:
@@ -245,8 +269,25 @@ class StratumAgent:
             "engagement",
             "process",
             "services",
+            "service",
             "project",
             "data",
             "jeffrey",
+            "methodology",
+            "roadmap",
+            "roi",
+            "analytics",
+            "automation",
+            "integration",
+            "consult",
+            "professional",
+            "offer",
+            "what do you do",
+            "what does",
+            "tell me about",
+            "about",
+            "help",
+            "how do",
+            "can you",
         ]
         return not any(term in lowered for term in scope_terms)

@@ -38,7 +38,7 @@ def get_settings() -> Settings:
 
     return Settings(
         allowed_origins=_split_csv(origins),
-        confidence_threshold=float(os.getenv("CONFIDENCE_THRESHOLD", "0.55")),
+        confidence_threshold=float(os.getenv("CONFIDENCE_THRESHOLD", "0.40")),
         calendly_url=os.getenv(
             "CALENDLY_URL", "https://calendly.com/edstratumlabs/discovery"
         ),
