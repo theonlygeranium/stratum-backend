@@ -65,7 +65,9 @@ class StratumAgent:
                 source=retrieval.source,
                 response_text=(
                     f"{CONFIDENCE_ESCALATION_MESSAGE} I do not have a strong enough "
-                    "source in the EdStratum knowledge base to answer that confidently."
+                    "source in the EdStratum knowledge base to answer that confidently. "
+                    f"If you'd like to discuss this with Jeffrey, you can book a call here: "
+                    f"{self.settings.calendly_url}"
                 ),
             )
 
@@ -212,9 +214,15 @@ class StratumAgent:
             if msg.role in ("user", "assistant") and msg.content
         ]
 
+        # Inject the calendar URL into the system prompt so the LLM can
+        # provide it when visitors ask about scheduling or contacting Jeffrey.
+        system_prompt = RAG_SYSTEM_PROMPT.format(
+            calendar_url=self.settings.calendly_url
+        )
+
         llm_response = await generate_response(
             self.settings,
-            RAG_SYSTEM_PROMPT,
+            system_prompt,
             context,
             conversation_history,
             query,
@@ -289,5 +297,19 @@ class StratumAgent:
             "help",
             "how do",
             "can you",
+            "contact",
+            "schedule",
+            "call",
+            "meeting",
+            "talk",
+            "speak",
+            "connect",
+            "pricing",
+            "cost",
+            "hire",
+            "work with",
+            "engage",
+            "consultation",
+            "discovery",
         ]
         return not any(term in lowered for term in scope_terms)
