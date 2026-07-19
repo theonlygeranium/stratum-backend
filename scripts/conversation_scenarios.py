@@ -1,18 +1,9 @@
 from __future__ import annotations
 
-import json
 from typing import Any
 
-import pytest
-from fastapi.testclient import TestClient
 
-import app.main as main_module
-
-
-client = TestClient(main_module.app)
-
-
-def _base_payload(
+def base_payload(
     content: str,
     *,
     mode: str = "open",
@@ -27,30 +18,6 @@ def _base_payload(
         "intakeAnswers": intake_answers or {},
         "sessionId": session_id,
     }
-
-
-def _events(response_text: str) -> list[dict[str, Any]]:
-    return [
-        json.loads(block.removeprefix("data: "))
-        for block in response_text.strip().split("\n\n")
-        if block.strip()
-    ]
-
-
-def _post(payload: dict[str, Any]) -> list[dict[str, Any]]:
-    response = client.post("/api/chat", json=payload)
-    assert response.status_code == 200
-    return _events(response.text)
-
-
-@pytest.fixture(autouse=True)
-def _isolate_agent_state(tmp_path):
-    main_module.agent.low_confidence_counts.clear()
-    main_module.agent.session_store.database_url = None
-    main_module.agent.session_store._db_disabled = True
-    object.__setattr__(main_module.agent.settings, "escalation_log_dir", tmp_path)
-    object.__setattr__(main_module.agent.settings, "resend_api_key", None)
-    object.__setattr__(main_module.agent.settings, "jeffrey_email", None)
 
 
 OPEN_QUESTIONS = [
@@ -154,7 +121,7 @@ INTAKE_PROGRESS = [
 ]
 
 
-def _completed_intake(timeline: str) -> dict[str, str]:
+def completed_intake(timeline: str) -> dict[str, str]:
     return {
         "org-type": "EdTech platform",
         "canvas-usage": "Canvas is a core integration target",
@@ -170,7 +137,7 @@ SCENARIOS: list[dict[str, Any]] = [
     *[
         {
             "name": f"open-{index}",
-            "payload": _base_payload(question, session_id=f"matrix-open-{index}"),
+            "payload": base_payload(question, session_id=f"matrix-open-{index}"),
             "mode": "open",
         }
         for index, question in enumerate(OPEN_QUESTIONS)
@@ -178,7 +145,7 @@ SCENARIOS: list[dict[str, Any]] = [
     *[
         {
             "name": f"about-{index}",
-            "payload": _base_payload(
+            "payload": base_payload(
                 question,
                 mode="about",
                 session_id=f"matrix-about-{index}",
@@ -190,7 +157,7 @@ SCENARIOS: list[dict[str, Any]] = [
     *[
         {
             "name": f"escalation-{index}",
-            "payload": _base_payload(
+            "payload": base_payload(
                 question,
                 mode="open",
                 session_id=f"matrix-escalation-{index}",
@@ -200,10 +167,36 @@ SCENARIOS: list[dict[str, Any]] = [
         }
         for index, (question, expected) in enumerate(ESCALATION_QUESTIONS)
     ],
+    {
+        "name": "direct-escalation-mode",
+        "payload": base_payload(
+            "I would like to connect with Jeffrey.",
+            mode="escalation",
+            session_id="matrix-direct-escalation",
+        ),
+        "mode": "escalation",
+        "escalate": "explicit",
+    },
+    {
+        "name": "mid-intake-frustration-escalation",
+        "payload": base_payload(
+            "This is not helping; I already told you the context.",
+            mode="intake",
+            session_id="matrix-mid-intake-frustration",
+            intake_index=3,
+            intake_answers={
+                "org-type": "Higher Ed institution",
+                "canvas-usage": "Canvas is our LMS",
+                "problem": "advising triage",
+            },
+        ),
+        "mode": "escalation",
+        "escalate": "sentiment",
+    },
     *[
         {
             "name": f"intake-progress-{index}",
-            "payload": _base_payload(
+            "payload": base_payload(
                 content,
                 mode="intake",
                 session_id=f"matrix-intake-progress-{index}",
@@ -216,12 +209,12 @@ SCENARIOS: list[dict[str, Any]] = [
     ],
     {
         "name": "intake-complete-high-intent-30-60",
-        "payload": _base_payload(
+        "payload": base_payload(
             "Success is a production pilot.",
             mode="intake",
             session_id="matrix-intake-complete-high",
             intake_index=7,
-            intake_answers=_completed_intake("30-60 days"),
+            intake_answers=completed_intake("30-60 days"),
         ),
         "mode": "intake",
         "snapshot": True,
@@ -229,12 +222,12 @@ SCENARIOS: list[dict[str, Any]] = [
     },
     {
         "name": "intake-complete-high-intent-3-6",
-        "payload": _base_payload(
+        "payload": base_payload(
             "Success is a deployable pilot.",
             mode="intake",
             session_id="matrix-intake-complete-three-six",
             intake_index=7,
-            intake_answers=_completed_intake("3-6 months"),
+            intake_answers=completed_intake("3-6 months"),
         ),
         "mode": "intake",
         "snapshot": True,
@@ -242,12 +235,12 @@ SCENARIOS: list[dict[str, Any]] = [
     },
     {
         "name": "intake-complete-exploring",
-        "payload": _base_payload(
+        "payload": base_payload(
             "Success is clarity on whether to proceed.",
             mode="intake",
             session_id="matrix-intake-complete-exploring",
             intake_index=7,
-            intake_answers=_completed_intake("Exploring"),
+            intake_answers=completed_intake("Exploring"),
         ),
         "mode": "intake",
         "snapshot": True,
@@ -255,66 +248,10 @@ SCENARIOS: list[dict[str, Any]] = [
     },
     {
         "name": "out-of-scope",
-        "payload": _base_payload(
+        "payload": base_payload(
             "Can you recommend a backpacking route in Iceland?",
             session_id="matrix-out-of-scope",
         ),
         "mode": "open",
     },
 ]
-
-
-from scripts.conversation_scenarios import (  # noqa: E402
-    SCENARIOS as SHARED_SCENARIOS,
-    base_payload as shared_base_payload,
-)
-
-SCENARIOS = SHARED_SCENARIOS
-_base_payload = shared_base_payload
-
-
-def test_matrix_has_50_plus_representative_scenarios() -> None:
-    assert len(SCENARIOS) >= 50
-
-
-@pytest.mark.parametrize("scenario", SCENARIOS, ids=[scenario["name"] for scenario in SCENARIOS])
-def test_representative_conversation_matrix(scenario: dict[str, Any]) -> None:
-    events = _post(scenario["payload"])
-
-    assert events[0]["type"] == "phase"
-    assert events[-1]["type"] == "done"
-    assert [event["type"] for event in events].count("done") == 1
-    assert not any(event.get("type") == "error" for event in events)
-
-    if scenario["mode"] == "open" and "escalate" not in scenario:
-        assert any(event["type"] == "token" for event in events)
-    if scenario["mode"] == "about":
-        assert all(event["type"] != "source" for event in events)
-    if scenario["mode"] == "intake":
-        assert events[0]["phase"] == "assessing"
-    if "snapshot" in scenario:
-        assert bool(events[-1]["snapshot"]) is scenario["snapshot"]
-    if "escalate" in scenario:
-        assert events[-1]["escalate"] == scenario["escalate"]
-
-    text = "".join(event.get("token", "") for event in events)
-    assert "I am human" not in text
-    assert "I'm human" not in text
-
-
-def test_confidence_escalates_after_two_low_confidence_turns() -> None:
-    payload = _base_payload(
-        "Can AI recommend a backpacking route in Iceland?",
-        session_id="matrix-low-confidence-repeat",
-    )
-
-    first = _post(payload)
-    second = _post(payload)
-
-    assert first[-1]["escalate"] is None
-    assert second[0:3] == [
-        {"type": "phase", "phase": "searching"},
-        {"type": "phase", "phase": "retrieving"},
-        {"type": "phase", "phase": "escalating"},
-    ]
-    assert second[-1]["escalate"] == "confidence"

@@ -219,6 +219,36 @@ def test_explicit_escalation() -> None:
     assert events[-1]["escalate"] == "explicit"
 
 
+def test_eval_header_suppresses_escalation_notification(monkeypatch) -> None:
+    async def fail_notify(*args, **kwargs) -> None:
+        raise AssertionError("eval smoke tests must not send notifications")
+
+    monkeypatch.setattr(main_module.agent, "_notify_only", fail_notify)
+    response = client.post(
+        "/api/chat",
+        json={
+            "messages": [
+                {
+                    "role": "user",
+                    "content": "I want to start a project and talk to Jeffrey.",
+                    "timestamp": 0,
+                }
+            ],
+            "mode": "open",
+            "intakeIndex": None,
+            "intakeAnswers": {},
+            "sessionId": "contract-eval-suppression",
+        },
+        headers={"X-Stratum-Eval": "true"},
+    )
+
+    events = _events(response.text)
+
+    assert response.status_code == 200
+    assert events[0] == {"type": "phase", "phase": "escalating"}
+    assert events[-1]["escalate"] == "explicit"
+
+
 def test_frontend_mock_explicit_human_trigger() -> None:
     events = _post(
         {

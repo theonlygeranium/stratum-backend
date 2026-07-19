@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from collections.abc import AsyncGenerator
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 
@@ -50,10 +50,15 @@ async def health() -> HealthResponse:
 
 
 @app.post("/api/chat")
-async def chat(request: ChatRequest) -> StreamingResponse:
+async def chat(request: ChatRequest, http_request: Request) -> StreamingResponse:
     async def stream() -> AsyncGenerator[str, None]:
         try:
-            async for event in agent.stream(request):
+            async for event in agent.stream(
+                request,
+                suppress_notifications=(
+                    http_request.headers.get("x-stratum-eval") == "true"
+                ),
+            ):
                 yield sse_event(event)
         except Exception:
             yield sse_event(

@@ -72,19 +72,30 @@ class StratumAgent:
             escalation_handler=self._escalate,
         )
 
-    async def stream(self, request: ChatRequest) -> AsyncGenerator[StreamEvent, None]:
+    async def stream(
+        self,
+        request: ChatRequest,
+        *,
+        suppress_notifications: bool = False,
+    ) -> AsyncGenerator[StreamEvent, None]:
         query = last_user_text(request.messages)
         direct_trigger = detect_direct_trigger(query)
         if direct_trigger or request.mode == "escalation":
             async for event in self._stream_escalation(
                 request,
                 direct_trigger or "explicit",
+                suppress_notifications=suppress_notifications,
             ):
                 yield event
             return
 
         if request.mode == "intake":
-            async for event in self._stream_result(await self._intake(request)):
+            async for event in self._stream_result(
+                await self._intake(
+                    request,
+                    suppress_notifications=suppress_notifications,
+                )
+            ):
                 yield event
             return
 
@@ -93,12 +104,17 @@ class StratumAgent:
                 yield event
             return
 
-        async for event in self._stream_open(request):
+        async for event in self._stream_open(
+            request,
+            suppress_notifications=suppress_notifications,
+        ):
             yield event
 
     async def _stream_open(
         self,
         request: ChatRequest,
+        *,
+        suppress_notifications: bool = False,
     ) -> AsyncGenerator[StreamEvent, None]:
         query = last_user_text(request.messages)
         yield PhaseEvent(type="phase", phase="searching")
@@ -122,7 +138,8 @@ class StratumAgent:
             await self.session_store.set_low_confidence_count(request.session_id, count)
             if count >= 2:
                 yield PhaseEvent(type="phase", phase="escalating")
-                await self._notify_only(request, "confidence", None)
+                if not suppress_notifications:
+                    await self._notify_only(request, "confidence", None)
                 yield SourceEvent(type="source", source=retrieval.source)
                 async for event in self._stream_text(
                     self._handoff_message(request, "confidence")
@@ -169,9 +186,12 @@ class StratumAgent:
         self,
         request: ChatRequest,
         trigger: str,
+        *,
+        suppress_notifications: bool = False,
     ) -> AsyncGenerator[StreamEvent, None]:
         yield PhaseEvent(type="phase", phase="escalating")
-        await self._notify_only(request, trigger, None)
+        if not suppress_notifications:
+            await self._notify_only(request, trigger, None)
         async for event in self._stream_text(self._handoff_message(request, trigger)):
             yield event
         yield DoneEvent(type="done", escalate=trigger)  # type: ignore[arg-type]
@@ -234,7 +254,12 @@ class StratumAgent:
             response_text=response,
         )
 
-    async def _intake(self, request: ChatRequest) -> StratumResult:
+    async def _intake(
+        self,
+        request: ChatRequest,
+        *,
+        suppress_notifications: bool = False,
+    ) -> StratumResult:
         index = request.intake_index if request.intake_index is not None else 0
         if len(request.intake_answers) >= len(INTAKE_QUESTIONS) or index >= len(INTAKE_QUESTIONS):
             snapshot = self._snapshot(request)
@@ -248,7 +273,8 @@ class StratumAgent:
             trigger = "high_intent" if high_intent else None
             if high_intent:
                 response = f"{response}\n\n{HIGH_INTENT_ESCALATION_MESSAGE}"
-                await self._notify_only(request, "high_intent", snapshot)
+                if not suppress_notifications:
+                    await self._notify_only(request, "high_intent", snapshot)
             return StratumResult(
                 phases=["assessing", "composing"],
                 response_text=response,

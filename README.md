@@ -72,6 +72,12 @@ Run the RAG acceptance harness:
 .venv/bin/python scripts/eval_rag.py --json
 ```
 
+Run the deployed Phase 4 conversation matrix:
+
+```bash
+.venv/bin/python scripts/eval_deployed_conversations.py --json
+```
+
 Current local targets:
 
 - Retrieval Recall@10: `>= 0.90`.
