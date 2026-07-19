@@ -1,24 +1,39 @@
-# Cloudflare Deploy Status
+# STRATUM Deploy Status
 
-Checked on 2026-07-19 by Worker C. Cloudflare metadata was queried read-only; no Cloudflare mutation was performed.
+Checked on 2026-07-19 after the Railway-backed STRATUM deployment.
 
-- Cloudflare Pages project `edstratumlabs` exists.
-- Production domains: `edstratumlabs.ai`, `www.edstratumlabs.ai`, `edstratumlabs.pages.dev`.
-- Production branch: `main`.
-- Latest production deployment status: `success`.
-- Current Pages production and preview environment variables are empty.
-- The local workspace does not contain the Phase 1 frontend repo or `dist/` artifact.
-- `/workspace/edstratum-v2` is missing in this environment.
-- The attached frontend contract confirms Phase 1 does not yet contain HTTP/SSE fetch code. A minimal adapter is staged in `frontend-integration/`.
-- `railway`, `flyctl`, and `wrangler` are not installed in this environment.
-- `RAILWAY_TOKEN`, `FLY_API_TOKEN`, `STRATUM_BACKEND_URL`, and Cloudflare credential env vars are not exported in this shell.
+## Backend
 
-Do not set `VITE_STRATUM_API_URL` until the backend has a production URL that passes `/api/health`. Do not redeploy the frontend from this backend-only workspace, because the live SEO files and frontend source are not present here.
+- GitHub repository: `theonlygeranium/stratum-backend`
+- Branch: `main`
+- Latest commit: `519cfde8fac4f4a3dda653fcff6d80ec1b81f013`
+- Railway project/environment: `sunny-ambition / production`
+- Railway deployment id: `5514940002`
+- Railway status: `success`
+- Public backend URL: `https://stratum-backend-production-a340.up.railway.app`
+- Health check: `GET /api/health` returns `{"status":"healthy","stratum":"online","backend_enabled":true}`
 
-Deployment remains blocked on:
+## Cloudflare Pages
 
-1. Railway/Fly/VPS credentials and project ownership for the backend host.
-2. A production backend URL, preferably `https://stratum.edstratumlabs.ai` or `https://api.edstratumlabs.ai`.
-3. The frontend source workspace or verified `dist/` artifact with SEO files intact.
-4. Applying the `frontend-integration/` adapter to the real React source.
-5. A fresh Cloudflare Pages build/deploy after `VITE_STRATUM_API_URL` is set as a production build-time variable.
+- Pages project: `edstratumlabs`
+- Production aliases: `https://edstratumlabs.ai`, `https://www.edstratumlabs.ai`
+- Pages deployment id: `820a3bbe-ba74-4f80-9e44-dc2e11b1aa5d`
+- Pages deployment status: `success`
+- Production build-time env var: `VITE_STRATUM_API_URL=https://stratum-backend-production-a340.up.railway.app`
+- Live STRATUM chunk includes the Railway URL, `/api/chat`, `fetch(...)`, and `Accept: text/event-stream`.
+
+## Verification
+
+- Backend test suite: `21 passed`
+- Docker build: passed with the Railway-compatible `${PORT:-8000}` command.
+- Secret/token scan: no matches in tracked backend source.
+- Live backend SSE smoke test: passed for open/about/escalation paths.
+- Live CORS preflight from `https://edstratumlabs.ai`: passed.
+- Live frontend SEO tags: meta description, canonical, OG title, and OG description present.
+- Live static files: `/robots.txt`, `/sitemap.xml`, `/og-image.png`, `/_headers`, and `/_redirects` all return HTTP 200.
+
+## Notes
+
+- The local shell is not authenticated to Railway. GitHub deployment statuses confirm Railway production deploy success and expose the public service domain.
+- The Railway API token provided during handoff was rejected by Railway as both `RAILWAY_API_TOKEN` and `RAILWAY_TOKEN`, so service variable values were not listed locally.
+- Cloudflare credentials remain only in the sensitive handoff attachment and were not committed to this repository.
