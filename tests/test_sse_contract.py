@@ -1,13 +1,21 @@
 from __future__ import annotations
 
+import asyncio
 import json
+import os
 
 import pytest
 from fastapi.testclient import TestClient
 from pydantic import ValidationError
 
-from app.graph import initial_state_from_request, route_key
-from app.models import ChatRequest
+from app.graph import (
+    build_stratum_graph,
+    initial_state_from_request,
+    request_from_state,
+    route_key,
+    route_node,
+)
+from app.models import ChatRequest, SourceConfidence, StratumResult
 from app.sse import sse_event
 import app.main as main_module
 
@@ -283,8 +291,11 @@ def test_initial_graph_state_uses_api_contract_names() -> None:
 
     state = initial_state_from_request(request)
 
-    assert state["messages"] == request.messages
+    assert state["messages"] == [
+        message.model_dump(mode="json", by_alias=True) for message in request.messages
+    ]
     assert state["mode"] == "intake"
+    assert state["request_mode"] == "intake"
     assert state["intake_index"] == 2
     assert state["intake_answers"] == {"org-type": "Higher Ed"}
     assert state["source_confidence"] is None
@@ -295,3 +306,120 @@ def test_initial_graph_state_uses_api_contract_names() -> None:
 
     state["mode"] = "unknown"  # type: ignore[typeddict-item]
     assert route_key(state) == "open"
+
+
+def test_direct_trigger_routes_without_losing_request_mode() -> None:
+    request = ChatRequest.model_validate(
+        {
+            "messages": [
+                {
+                    "role": "user",
+                    "content": "I want to start a project and talk to Jeffrey.",
+                    "timestamp": 0,
+                }
+            ],
+            "mode": "open",
+            "intakeIndex": None,
+            "intakeAnswers": {},
+            "sessionId": "contract-graph-route",
+        }
+    )
+    state = initial_state_from_request(request)
+    state.update(route_node(state))
+
+    assert route_key(state) == "escalation"
+    assert state["escalation_trigger"] == "explicit"
+    assert request_from_state(state).mode == "open"
+
+
+def test_agent_uses_compiled_langgraph_runtime() -> None:
+    assert main_module.agent.graph_runtime is not None
+    compiled = main_module.agent.graph_runtime.compiled or asyncio.run(
+        main_module.agent.graph_runtime._compiled_graph()
+    )
+    assert main_module.agent.graph_runtime.checkpointer_name in {"memory", "postgres"}
+    assert {
+        "route",
+        "open",
+        "intake",
+        "about",
+        "escalation",
+    } <= set(compiled.nodes)
+
+
+def test_graph_runtime_lazily_compiles_checkpointer(monkeypatch: pytest.MonkeyPatch) -> None:
+    from langgraph.checkpoint.memory import MemorySaver
+
+    async def fake_make_checkpointer(database_url: str | None):
+        assert database_url == "postgresql://example/stratum"
+        return MemorySaver(), "postgres", None
+
+    async def open_handler(_: ChatRequest) -> StratumResult:
+        return StratumResult(
+            phases=["composing"],
+            source=SourceConfidence(label="Test", score=1.0, grounded=True),
+            response_text="ok",
+        )
+
+    monkeypatch.setattr("app.graph._make_checkpointer", fake_make_checkpointer)
+    runtime = build_stratum_graph(
+        database_url="postgresql://example/stratum",
+        open_handler=open_handler,
+        intake_handler=open_handler,
+        about_handler=lambda: StratumResult(phases=["composing"], response_text="ok"),
+        escalation_handler=lambda request, trigger: open_handler(request),
+    )
+    assert runtime is not None
+    assert runtime.compiled is None
+    assert runtime.checkpointer_name == "uninitialized"
+
+    request = ChatRequest.model_validate(
+        {
+            "messages": [{"role": "user", "content": "Hello", "timestamp": 0}],
+            "mode": "open",
+            "intakeIndex": None,
+            "intakeAnswers": {},
+            "sessionId": "lazy-graph",
+        }
+    )
+    result = asyncio.run(runtime.respond(request))
+
+    assert result.response_text == "ok"
+    assert runtime.compiled is not None
+    assert runtime.checkpointer_name == "postgres"
+
+
+@pytest.mark.skipif(
+    not os.getenv("STRATUM_TEST_DATABASE_URL"),
+    reason="set STRATUM_TEST_DATABASE_URL to run the Postgres checkpoint smoke",
+)
+def test_graph_runtime_uses_async_postgres_checkpointer() -> None:
+    async def open_handler(_: ChatRequest) -> StratumResult:
+        return StratumResult(
+            phases=["composing"],
+            source=SourceConfidence(label="Test", score=1.0, grounded=True),
+            response_text="ok",
+        )
+
+    runtime = build_stratum_graph(
+        database_url=os.environ["STRATUM_TEST_DATABASE_URL"],
+        open_handler=open_handler,
+        intake_handler=open_handler,
+        about_handler=lambda: StratumResult(phases=["composing"], response_text="ok"),
+        escalation_handler=lambda request, trigger: open_handler(request),
+    )
+    assert runtime is not None
+    request = ChatRequest.model_validate(
+        {
+            "messages": [{"role": "user", "content": "Hello", "timestamp": 0}],
+            "mode": "open",
+            "intakeIndex": None,
+            "intakeAnswers": {},
+            "sessionId": "postgres-graph",
+        }
+    )
+
+    result = asyncio.run(runtime.respond(request))
+
+    assert result.response_text == "ok"
+    assert runtime.checkpointer_name == "postgres"

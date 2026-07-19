@@ -1,0 +1,15 @@
+{"name":"canvas-lti-gradebook","query":"Can you help with Canvas LTI grade passback, Developer Keys, and roster sync?","expected_service_area":"canvas","expected_source_title":"Canvas LTI and Developer Key Context","should_ground":true}
+{"name":"canvas-data-reporting","query":"When does Canvas Data 2 matter for reporting beyond API calls?","expected_service_area":"canvas","expected_source_title":"Canvas LTI and Developer Key Context","should_ground":true}
+{"name":"deep-linking","query":"What does Deep Linking do in an LTI Advantage integration?","expected_service_area":"canvas","expected_source_title":"Canvas LTI and Developer Key Context","should_ground":true}
+{"name":"ai-roadmap-roi","query":"How should we build an AI roadmap with ROI, governance, and vendor review?","expected_service_area":"ai_strategy","expected_source_title":"EdStratum AI Roadmap Framework","should_ground":true}
+{"name":"build-versus-buy","query":"How should we decide build versus buy for an AI feature?","expected_service_area":"ai_strategy","expected_source_title":"EdStratum AI Roadmap Framework","should_ground":true}
+{"name":"pilot-design","query":"What makes a useful pilot for an AI implementation?","expected_service_area":"ai_strategy","expected_source_title":"EdStratum AI Roadmap Framework","should_ground":true}
+{"name":"rag-grounding","query":"What makes a RAG system grounded with semantic chunking, BM25, reranking, and confidence?","expected_service_area":"rag_engineering","expected_source_title":"STRATUM RAG Methodology","should_ground":true}
+{"name":"source-confidence","query":"How does source confidence reduce hallucination risk?","expected_service_area":"rag_engineering","expected_source_title":"STRATUM RAG Methodology","should_ground":true}
+{"name":"knowledge-base","query":"Why should STRATUM use a maintained knowledge base for answers?","expected_service_area":"rag_engineering","expected_source_title":"STRATUM RAG Methodology","should_ground":true}
+{"name":"intake-high-intent","query":"How does STRATUM intake scoring decide high intent and readiness snapshots?","expected_content_type":"intake_logic","expected_source_title":"STRATUM Intake Scoring Logic","should_ground":true}
+{"name":"company-overview","query":"What does EdStratum Labs do?","expected_source_title":"EdStratum Labs Company Overview","should_ground":true}
+{"name":"founder-led","query":"Is EdStratum founder-led and what should visitors expect?","expected_source_title":"EdStratum Labs Company Overview","should_ground":true}
+{"name":"contact","query":"How do I schedule a discovery call with Jeffrey?","expected_source_title":"Contacting EdStratum Labs","should_ground":true}
+{"name":"case-study-rag","query":"Do you have a pattern for a support workflow that needs grounded answers?","expected_content_type":"case_study","expected_source_title":"EdStratum Case Study Patterns","should_ground":true}
+{"name":"out-of-scope-travel","query":"Can AI recommend a backpacking route in Iceland?","should_ground":false}

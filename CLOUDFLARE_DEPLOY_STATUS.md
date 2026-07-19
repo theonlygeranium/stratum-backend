@@ -6,10 +6,8 @@ Checked on 2026-07-19 after the Railway-backed STRATUM deployment.
 
 - GitHub repository: `theonlygeranium/stratum-backend`
 - Branch: `main`
-- Latest verified application commit: `83cac9c18568631daff4936e3e56aee25dddbced`
 - Railway project/environment: `sunny-ambition / production`
-- Railway deployment id: `5514989950`
-- Railway status: `success`
+- Railway deployment status: verified after each backend push through GitHub deployment status and live health checks.
 - Public backend URL: `https://stratum-backend-production-a340.up.railway.app`
 - Health check: `GET /api/health` returns `{"status":"healthy","stratum":"online","backend_enabled":true}`
 
@@ -24,10 +22,12 @@ Checked on 2026-07-19 after the Railway-backed STRATUM deployment.
 
 ## Verification
 
-- Backend test suite: `73 passed, 1 warning`
+- Backend test suite: `78 passed, 1 skipped, 2 warnings`
+- Optional Postgres checkpoint smoke: passed locally with `STRATUM_TEST_DATABASE_URL`.
+- RAG acceptance harness: passed locally with Recall@10 `1.0`, groundedness proxy `1.0`, and no-key first-token latency under `1500ms`.
 - Docker build: passed with the Railway-compatible `${PORT:-8000}` command.
 - Secret/token scan: no matches in tracked backend source.
-- Live backend SSE smoke test: passed for open/about/escalation paths after commit `83cac9c`.
+- Live backend SSE smoke test: passed for open/about/escalation paths.
 - Live CORS preflight from `https://edstratumlabs.ai`: passed.
 - Live frontend SEO tags: meta description, canonical, OG title, and OG description present.
 - Live static files: `/robots.txt`, `/sitemap.xml`, `/og-image.png`, `/_headers`, and `/_redirects` all return HTTP 200.
@@ -35,12 +35,12 @@ Checked on 2026-07-19 after the Railway-backed STRATUM deployment.
 ## Remaining Strict Spec Gaps
 
 - The backend emits valid SSE chunks, but model/provider streaming is not wired end to end; responses are composed first and then emitted as token chunks.
-- `app/graph.py` contains state helpers, but the request path is not yet a compiled LangGraph `StateGraph` with node/edge orchestration or `PostgresSaver` checkpoints.
-- Retrieval is local hybrid scoring with RRF-style fusion and heuristic reranking. OpenAI embeddings, Chroma/Pinecone/Qdrant storage, and cross-encoder reranking are still architectural gaps.
-- Acceptance metrics such as retrieval Recall@10, groundedness percentage, latency targets, escalation rate, and abandonment are not yet measured against production traffic or a formal eval harness.
+- LangGraph routing and optional PostgresSaver checkpoint support are implemented, but production checkpoint table creation still needs Railway runtime verification with `DATABASE_URL`.
+- Retrieval now uses `rank_bm25`, Chroma-backed dense retrieval, RRF-style fusion, and heuristic reranking. A true cross-encoder reranker remains optional/future work.
+- Acceptance metrics now run locally through `scripts/eval_rag.py`; production traffic metrics such as escalation rate and abandonment are not yet measured.
 
 ## Notes
 
-- The local shell is not authenticated to Railway. GitHub deployment statuses confirm Railway production deploy success and expose the public service domain.
-- The Railway API values provided during handoff did not authorize as Railway bearer tokens, so service variable values were not listed locally.
+- Railway CLI agent support and the `use-railway` skill are installed. The local CLI is not OAuth-authenticated, but the custom Railway MCP can list the project and check service health.
+- Custom Railway MCP project read confirms project `sunny-ambition`, service `stratum-backend`, Postgres service `postgres`, and environment `production`. Some custom MCP deployment/domain/env-var reads currently fail against Railway GraphQL schema fields.
 - Cloudflare credentials remain only in the sensitive handoff attachment and were not committed to this repository.

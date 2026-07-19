@@ -1,4 +1,11 @@
 ---
+source_title: "Contacting EdStratum Labs"
+source_url: "https://edstratumlabs.ai/"
+service_area: "general"
+service_areas: "canvas,ai_strategy,rag_engineering,general"
+content_type: "site_copy"
+freshness_date: "2026-07-19"
+topics: "contact,scheduling,consultation,discovery,escalation,pricing,jeffrey"
 title: Contacting EdStratum Labs
 category: company
 tags: [contact, scheduling, consultation, discovery, escalation]

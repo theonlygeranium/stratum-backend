@@ -3,11 +3,11 @@ from __future__ import annotations
 from app.config import Settings
 from app.escalation import (
     build_payload,
-    detect_direct_trigger,
     detect_high_intent,
     last_user_text,
     send_or_log_escalation,
 )
+from app.graph import build_stratum_graph, procedural_fallback
 from app.llm import generate_response
 from app.models import ChatRequest, ReadinessSnapshot, SourceConfidence, StratumResult
 from app.prompts import (
@@ -28,21 +28,32 @@ class StratumAgent:
         self.retriever = HybridRetriever(
             settings.knowledge_base_dir,
             confidence_threshold=settings.confidence_threshold,
+            embedding_provider=settings.embedding_provider,
+            embedding_model=settings.embedding_model,
+            embedding_api_key=settings.llm_api_key,
+            vector_store_provider=settings.vector_store_provider,
+            chroma_persist_dir=settings.chroma_persist_dir,
         )
         self.session_store = SessionStore(settings.database_url)
         self.low_confidence_counts = self.session_store.memory_counts
+        self.graph_runtime = build_stratum_graph(
+            database_url=settings.database_url,
+            open_handler=self._open,
+            intake_handler=self._intake,
+            about_handler=self._about,
+            escalation_handler=self._escalate,
+        )
 
     async def respond(self, request: ChatRequest) -> StratumResult:
-        text = last_user_text(request.messages)
-        direct_trigger = detect_direct_trigger(text)
-        if direct_trigger or request.mode == "escalation":
-            return await self._escalate(request, direct_trigger or "explicit")
-
-        if request.mode == "intake":
-            return await self._intake(request)
-        if request.mode == "about":
-            return self._about()
-        return await self._open(request)
+        if self.graph_runtime is not None:
+            return await self.graph_runtime.respond(request)
+        return await procedural_fallback(
+            request,
+            open_handler=self._open,
+            intake_handler=self._intake,
+            about_handler=self._about,
+            escalation_handler=self._escalate,
+        )
 
     async def _open(self, request: ChatRequest) -> StratumResult:
         query = last_user_text(request.messages)

@@ -1,36 +1,54 @@
 from __future__ import annotations
 
+import asyncio
+from collections.abc import Awaitable, Callable
+from contextlib import AbstractAsyncContextManager
+from dataclasses import dataclass, field
 from typing import Annotated, Any, TypedDict, cast
 
+from app.escalation import detect_direct_trigger, last_user_text
 from app.models import (
-    ChatMessage,
     ChatRequest,
     ConversationMode,
     EscalationTrigger,
-    ReadinessSnapshot,
-    SourceConfidence,
+    StratumResult,
 )
 
 
 try:
-    from langgraph.graph.message import add_messages
+    from langgraph.checkpoint.memory import MemorySaver
+    from langgraph.graph import END, START, StateGraph
 except Exception:  # pragma: no cover - optional dependency fallback
-    def add_messages(left, right):
-        return [*(left or []), *(right or [])]
+    MemorySaver = None  # type: ignore[assignment]
+    StateGraph = None  # type: ignore[assignment]
+    START = "__start__"  # type: ignore[assignment]
+    END = "__end__"  # type: ignore[assignment]
+
+
+def merge_frontend_messages(
+    left: list[dict[str, Any]] | None,
+    right: list[dict[str, Any]] | None,
+) -> list[dict[str, Any]]:
+    """Use the frontend-supplied transcript when present; otherwise keep checkpoints."""
+    if right:
+        return list(right)
+    return list(left or [])
 
 
 class StratumState(TypedDict):
-    messages: Annotated[list[ChatMessage], add_messages]
+    messages: Annotated[list[dict[str, Any]], merge_frontend_messages]
     mode: ConversationMode
+    request_mode: ConversationMode
     intake_index: int | None
     intake_answers: dict[str, str]
     retrieved_context: list
-    source_confidence: SourceConfidence | None
+    source_confidence: dict[str, Any] | None
     escalation_trigger: EscalationTrigger
     escalation_context: dict[str, Any] | None
     response_text: str
-    snapshot: ReadinessSnapshot | None
+    snapshot: dict[str, Any] | None
     session_id: str
+    result: dict[str, Any] | None
 
 
 VALID_ROUTE_KEYS: set[ConversationMode] = {"open", "intake", "about", "escalation"}
@@ -38,8 +56,11 @@ VALID_ROUTE_KEYS: set[ConversationMode] = {"open", "intake", "about", "escalatio
 
 def initial_state_from_request(request: ChatRequest) -> StratumState:
     return {
-        "messages": request.messages,
+        "messages": [
+            message.model_dump(mode="json", by_alias=True) for message in request.messages
+        ],
         "mode": request.mode,
+        "request_mode": request.mode,
         "intake_index": request.intake_index,
         "intake_answers": request.intake_answers,
         "retrieved_context": [],
@@ -49,6 +70,7 @@ def initial_state_from_request(request: ChatRequest) -> StratumState:
         "response_text": "",
         "snapshot": None,
         "session_id": request.session_id,
+        "result": None,
     }
 
 
@@ -57,3 +79,173 @@ def route_key(state: StratumState) -> ConversationMode:
     if mode not in VALID_ROUTE_KEYS:
         return "open"
     return cast(ConversationMode, mode)
+
+
+def request_from_state(state: StratumState) -> ChatRequest:
+    mode = state.get("request_mode") or route_key(state)
+    if mode not in VALID_ROUTE_KEYS:
+        mode = "open"
+    return ChatRequest.model_validate(
+        {
+            "messages": state["messages"],
+            "mode": mode,
+            "intakeIndex": state.get("intake_index"),
+            "intakeAnswers": state.get("intake_answers") or {},
+            "sessionId": state["session_id"],
+        }
+    )
+
+
+def result_from_state(state: StratumState) -> StratumResult:
+    result = state.get("result")
+    if not result:
+        raise ValueError("STRATUM graph completed without a result")
+    return StratumResult.model_validate(result)
+
+
+def route_node(state: StratumState) -> dict[str, Any]:
+    request = request_from_state(state)
+    trigger = detect_direct_trigger(last_user_text(request.messages))
+    if trigger:
+        return {"mode": "escalation", "escalation_trigger": trigger}
+    return {"mode": route_key(state)}
+
+
+def _state_from_result(result: StratumResult) -> dict[str, Any]:
+    return {
+        "source_confidence": (
+            result.source.model_dump(mode="json") if result.source else None
+        ),
+        "escalation_trigger": result.escalate,
+        "response_text": result.response_text,
+        "snapshot": result.snapshot.model_dump(mode="json") if result.snapshot else None,
+        "result": result.model_dump(mode="json"),
+    }
+
+
+@dataclass
+class StratumGraphRuntime:
+    graph: Any
+    database_url: str | None
+    compiled: Any | None = None
+    checkpointer_name: str = "uninitialized"
+    _checkpointer_context: AbstractAsyncContextManager[Any] | None = None
+    _init_lock: asyncio.Lock = field(default_factory=asyncio.Lock)
+
+    async def respond(self, request: ChatRequest) -> StratumResult:
+        compiled = await self._compiled_graph()
+        final_state = await compiled.ainvoke(
+            initial_state_from_request(request),
+            {"configurable": {"thread_id": request.session_id}},
+        )
+        return result_from_state(cast(StratumState, final_state))
+
+    async def _compiled_graph(self) -> Any:
+        if self.compiled is not None:
+            return self.compiled
+        async with self._init_lock:
+            if self.compiled is not None:
+                return self.compiled
+            checkpointer, checkpointer_name, context = await _make_checkpointer(
+                self.database_url
+            )
+            self.compiled = self.graph.compile(
+                checkpointer=checkpointer,
+                name="stratum",
+            )
+            self.checkpointer_name = checkpointer_name
+            self._checkpointer_context = context
+            return self.compiled
+
+
+async def procedural_fallback(
+    request: ChatRequest,
+    *,
+    open_handler: Callable[[ChatRequest], Awaitable[StratumResult]],
+    intake_handler: Callable[[ChatRequest], Awaitable[StratumResult]],
+    about_handler: Callable[[], StratumResult],
+    escalation_handler: Callable[[ChatRequest, str], Awaitable[StratumResult]],
+) -> StratumResult:
+    state = initial_state_from_request(request)
+    state.update(route_node(state))
+    mode = route_key(state)
+    if mode == "intake":
+        return await intake_handler(request_from_state(state))
+    if mode == "about":
+        return about_handler()
+    if mode == "escalation":
+        trigger = state.get("escalation_trigger") or "explicit"
+        return await escalation_handler(request_from_state(state), trigger)
+    return await open_handler(request_from_state(state))
+
+
+def build_stratum_graph(
+    *,
+    database_url: str | None,
+    open_handler: Callable[[ChatRequest], Awaitable[StratumResult]],
+    intake_handler: Callable[[ChatRequest], Awaitable[StratumResult]],
+    about_handler: Callable[[], StratumResult],
+    escalation_handler: Callable[[ChatRequest, str], Awaitable[StratumResult]],
+) -> StratumGraphRuntime | None:
+    if StateGraph is None or MemorySaver is None:
+        return None
+
+    async def open_node(state: StratumState) -> dict[str, Any]:
+        return _state_from_result(await open_handler(request_from_state(state)))
+
+    async def intake_node(state: StratumState) -> dict[str, Any]:
+        return _state_from_result(await intake_handler(request_from_state(state)))
+
+    def about_node(_: StratumState) -> dict[str, Any]:
+        return _state_from_result(about_handler())
+
+    async def escalation_node(state: StratumState) -> dict[str, Any]:
+        trigger = state.get("escalation_trigger") or "explicit"
+        return _state_from_result(
+            await escalation_handler(request_from_state(state), trigger)
+        )
+
+    graph = StateGraph(StratumState)
+    graph.add_node("route", route_node)
+    graph.add_node("open", open_node)
+    graph.add_node("intake", intake_node)
+    graph.add_node("about", about_node)
+    graph.add_node("escalation", escalation_node)
+    graph.add_edge(START, "route")
+    graph.add_conditional_edges(
+        "route",
+        route_key,
+        {
+            "open": "open",
+            "intake": "intake",
+            "about": "about",
+            "escalation": "escalation",
+        },
+    )
+    for node in ("open", "intake", "about", "escalation"):
+        graph.add_edge(node, END)
+
+    return StratumGraphRuntime(
+        graph=graph,
+        database_url=database_url,
+    )
+
+
+async def _make_checkpointer(
+    database_url: str | None,
+) -> tuple[Any, str, AbstractAsyncContextManager[Any] | None]:
+    if database_url:
+        try:
+            from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
+
+            context = AsyncPostgresSaver.from_conn_string(database_url)
+            checkpointer = await context.__aenter__()
+            try:
+                await checkpointer.setup()
+                return checkpointer, "postgres", context
+            except Exception:
+                await context.__aexit__(None, None, None)
+        except Exception:
+            pass
+
+    return MemorySaver(), "memory", None

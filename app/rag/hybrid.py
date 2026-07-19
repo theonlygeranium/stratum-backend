@@ -6,9 +6,12 @@ from collections import Counter, defaultdict
 from dataclasses import dataclass
 from pathlib import Path
 
+from rank_bm25 import BM25Okapi
+
 from app.models import SourceConfidence
 from app.rag.chunker import chunk_documents
 from app.rag.documents import Document, load_knowledge_base
+from app.rag.vector_store import DenseVectorIndex, build_embedding_provider
 
 
 TOKEN_RE = re.compile(r"[a-z0-9][a-z0-9.+#-]*")
@@ -192,25 +195,41 @@ def tokenize(text: str) -> list[str]:
 
 
 class HybridRetriever:
-    def __init__(self, knowledge_base_dir: Path, confidence_threshold: float = 0.55):
+    def __init__(
+        self,
+        knowledge_base_dir: Path,
+        confidence_threshold: float = 0.55,
+        *,
+        embedding_provider: str = "hash",
+        embedding_model: str = "text-embedding-3-small",
+        embedding_api_key: str | None = None,
+        vector_store_provider: str = "chroma",
+        chroma_persist_dir: Path | None = None,
+    ):
         docs = load_knowledge_base(knowledge_base_dir)
         self.docs = chunk_documents(docs)
         self.confidence_threshold = confidence_threshold
+        self.embedding_model = embedding_model
         self._doc_text = [_document_search_text(doc) for doc in self.docs]
         self._doc_tokens = [tokenize(text) for text in self._doc_text]
         self._doc_terms = [_content_terms(tokens) for tokens in self._doc_tokens]
-        self._doc_term_counts = [Counter(tokens) for tokens in self._doc_tokens]
-        self._avgdl = (
-            sum(len(tokens) for tokens in self._doc_tokens) / len(self._doc_tokens)
-            if self._doc_tokens
-            else 0.0
-        )
-        self._idf = self._build_idf()
-        self._doc_feature_counts = [
-            _semantic_features(text, doc.metadata) for text, doc in zip(self._doc_text, self.docs)
+        self._bm25 = BM25Okapi(self._doc_terms) if self._doc_terms else None
+        dense_texts = [
+            _dense_embedding_text(text, doc.metadata)
+            for text, doc in zip(self._doc_text, self.docs, strict=False)
         ]
-        self._feature_idf = self._build_feature_idf()
-        self._doc_vectors = [self._feature_vector(counts) for counts in self._doc_feature_counts]
+        self._vector_index = DenseVectorIndex(
+            dense_texts,
+            embedding_provider=build_embedding_provider(
+                provider=embedding_provider,
+                openai_api_key=embedding_api_key,
+                embedding_model=embedding_model,
+            ),
+            vector_store_provider=vector_store_provider,
+            chroma_persist_dir=chroma_persist_dir,
+        )
+        self.embedding_provider = self._vector_index.embedding_provider.name
+        self.vector_store_provider = self._vector_index.vector_store_provider
 
     def retrieve(self, query: str, top_k: int = 5) -> RetrievalResult:
         if not self.docs or not query.strip():
@@ -227,32 +246,8 @@ class HybridRetriever:
         reranked = self._rerank(query, fused[:candidate_limit], bm25, semantic)
         top = reranked[:top_k]
         docs = [self._document_with_scores(*item) for item in top]
-        source = self._source_confidence(docs)
+        source = self._source_confidence(query, docs)
         return RetrievalResult(docs=docs, source=source)
-
-    def _build_idf(self) -> dict[str, float]:
-        idf: dict[str, float] = {}
-        total = len(self._doc_tokens)
-        if total == 0:
-            return idf
-        document_frequency: Counter[str] = Counter()
-        for tokens in self._doc_tokens:
-            document_frequency.update(set(tokens))
-        for token, df in document_frequency.items():
-            idf[token] = math.log(1 + (total - df + 0.5) / (df + 0.5))
-        return idf
-
-    def _build_feature_idf(self) -> dict[str, float]:
-        idf: dict[str, float] = {}
-        total = len(self._doc_feature_counts)
-        if total == 0:
-            return idf
-        document_frequency: Counter[str] = Counter()
-        for counts in self._doc_feature_counts:
-            document_frequency.update(set(counts))
-        for feature, df in document_frequency.items():
-            idf[feature] = math.log(1 + (total - df + 0.5) / (df + 0.5))
-        return idf
 
     def _metadata_filter(self, query: str) -> list[int]:
         areas = _query_service_areas(query)
@@ -268,38 +263,15 @@ class HybridRetriever:
         return filtered or list(range(len(self.docs)))
 
     def _rank_bm25(self, query: str, indexes: list[int]) -> list[tuple[int, float]]:
-        q_tokens = tokenize(query)
-        k1 = 1.5
-        b = 0.75
-        scores: list[tuple[int, float]] = []
-        for index in indexes:
-            tokens = self._doc_tokens[index]
-            counts = self._doc_term_counts[index]
-            dl = len(tokens) or 1
-            score = 0.0
-            for token in q_tokens:
-                if token not in counts:
-                    continue
-                tf = counts[token]
-                idf = self._idf.get(token, 0.0)
-                denominator = tf + k1 * (1 - b + b * dl / (self._avgdl or 1))
-                score += idf * (tf * (k1 + 1) / denominator)
-            scores.append((index, score))
+        if self._bm25 is None:
+            return []
+        query_terms = _content_terms(tokenize(query))
+        raw_scores = self._bm25.get_scores(query_terms)
+        scores = [(index, float(raw_scores[index])) for index in indexes]
         return sorted(scores, key=lambda item: item[1], reverse=True)
 
     def _rank_semantic(self, query: str, indexes: list[int]) -> list[tuple[int, float]]:
-        q_counts = _semantic_features(query)
-        q_vector = self._feature_vector(q_counts)
-        scores: list[tuple[int, float]] = []
-        for index in indexes:
-            scores.append((index, _cosine(q_vector, self._doc_vectors[index])))
-        return sorted(scores, key=lambda item: item[1], reverse=True)
-
-    def _feature_vector(self, counts: Counter[str]) -> dict[str, float]:
-        return {
-            feature: count * self._feature_idf.get(feature, 0.0)
-            for feature, count in counts.items()
-        }
+        return self._vector_index.rank(_dense_embedding_text(query), indexes)
 
     @staticmethod
     def _rrf_fusion(
@@ -386,14 +358,19 @@ class HybridRetriever:
         metadata["relevance_score"] = round(relevance_score, 4)
         metadata["retrieval_score"] = round(fused_score, 4)
         metadata["semantic_score"] = round(semantic_score, 4)
+        metadata["embedding_provider"] = self.embedding_provider
+        metadata["embedding_model"] = self.embedding_model
+        metadata["vector_store_provider"] = self.vector_store_provider
         return Document(content=doc.content, metadata=metadata)
 
-    def _source_confidence(self, docs: list[Document]) -> SourceConfidence:
+    def _source_confidence(self, query: str, docs: list[Document]) -> SourceConfidence:
         if not docs:
             return SourceConfidence(label="", score=0.0, grounded=False)
         doc = docs[0]
         relevance_score = float(doc.metadata.get("relevance_score", 0.0))
         score = min(1.0, relevance_score * 1.1 + 0.08)
+        if not _query_service_areas(query) and relevance_score < 0.52:
+            score = min(score, self.confidence_threshold - 0.03)
         score = round(score, 2)
         return SourceConfidence(
             label=str(doc.metadata.get("source_title", "EdStratum Knowledge Base")),
@@ -415,6 +392,18 @@ def _document_search_text(doc: Document) -> str:
         _metadata_list_text(metadata.get("aliases")),
     ]
     return "\n".join(part for part in parts if part)
+
+
+def _dense_embedding_text(
+    text: str,
+    metadata: dict[str, object] | None = None,
+) -> str:
+    features = _semantic_features(text, metadata)
+    expanded: list[str] = [text]
+    for feature, count in features.items():
+        repeats = max(1, min(3, round(count)))
+        expanded.extend([feature.replace(":", "_")] * repeats)
+    return " ".join(expanded)
 
 
 def _metadata_list_text(value: object) -> str:

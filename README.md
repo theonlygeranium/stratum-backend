@@ -6,7 +6,9 @@ The service is designed for the existing React/Vite frontend on Cloudflare Pages
 
 - `POST /api/chat` as a Server-Sent Events stream matching the Phase 1 `StreamEvent` union.
 - `GET /api/health` for platform health checks.
-- Local deterministic generation for development and CI when LLM credentials are absent.
+- LangGraph-based routing for open Q&A, intake, about, and escalation modes.
+- Hybrid RAG retrieval with `rank_bm25`, Chroma-backed dense retrieval, RRF fusion, and heuristic reranking.
+- Local deterministic embeddings/generation for development and CI when provider credentials are absent.
 - Optional Resend notification side effects when escalation credentials are configured.
 
 ## Run Locally
@@ -36,25 +38,49 @@ curl -N -X POST http://localhost:8000/api/chat \
 
 Copy `.env.example` to `.env` for local development. The backend starts without provider keys and uses deterministic fallback responses so contract tests can run offline.
 
-Production variables:
+Required demo variables:
 
-- `OPENAI_API_KEY`: optional for future LLM-backed generation.
+- `OPENAI_API_KEY`: enables OpenAI-compatible generation and, when `EMBEDDING_PROVIDER=openai`, OpenAI embeddings.
+- `DATABASE_URL`: enables Postgres-backed session state and LangGraph checkpoint attempts.
 - `RESEND_API_KEY`: enables escalation emails.
 - `JEFFREY_EMAIL`: destination for escalation emails.
 - `ALLOWED_ORIGINS`: comma-separated CORS origins.
+
+Useful optional variables:
+
 - `CONFIDENCE_THRESHOLD`: default `0.55`.
 - `CALENDLY_URL`: direct booking URL.
+- `EMBEDDING_PROVIDER`: `hash` for deterministic local/demo embeddings, or `openai`.
+- `EMBEDDING_MODEL`: default `text-embedding-3-small`.
+- `VECTOR_STORE_PROVIDER`: `chroma` by default, falling back to memory if Chroma is unavailable.
+- `CHROMA_PERSIST_DIR`: optional path for persistent local Chroma storage.
+
+## Verification
+
+Run the local contract, graph, conversation, and RAG tests:
+
+```bash
+.venv/bin/pytest -q
+```
+
+Run the RAG acceptance harness:
+
+```bash
+.venv/bin/python scripts/eval_rag.py --json
+```
+
+Current local targets:
+
+- Retrieval Recall@10: `>= 0.90`.
+- Groundedness proxy: `>= 0.85`.
+- No-key first-token latency: `< 1500ms`.
 
 ## Deployment Status
 
-Backend deployment needs a Python-capable host such as Railway, Fly.io, or a VPS. This workspace does not currently contain Railway/Fly credentials or a connected frontend source repo. Cloudflare Pages access is available through the sensitive handoff, but it should not be mutated until a production backend URL exists.
+The backend is deployed on Railway at:
 
-The frontend contract attachment also clarifies that Phase 1 has no HTTP/SSE fetch adapter yet. Before the Cloudflare redeploy, apply the code in `frontend-integration/` to the real frontend source so `STRATUM_BACKEND_ENABLED` routes to the backend instead of always calling the mock generator.
-
-Use the read-only preflight before any deploy handoff:
-
-```bash
-./scripts/deployment_readiness.sh
+```text
+https://stratum-backend-production-a340.up.railway.app
 ```
 
-After the backend is deployed, set `VITE_STRATUM_API_URL` as a Cloudflare Pages production build-time environment variable and redeploy the frontend from a workspace containing the React/Vite source or a verified `dist/` artifact. Use `scripts/set_cloudflare_pages_env.sh` for the env var, `scripts/verify_frontend_seo.sh` for SEO checks, and `deploy/README.md` for the deployment order.
+Cloudflare Pages serves the frontend at `https://edstratumlabs.ai` and the live STRATUM bundle points to the Railway backend URL. See `CLOUDFLARE_DEPLOY_STATUS.md` for the latest checked deployment evidence.

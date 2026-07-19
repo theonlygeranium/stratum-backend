@@ -70,6 +70,8 @@ def test_canvas_lti_query_retrieves_canvas_source() -> None:
     assert result.source.score >= 0.55
     assert result.docs[0].metadata["service_area"] == "canvas"
     assert "Canvas" in result.source.label
+    assert result.docs[0].metadata["embedding_provider"] in {"hash", "openai"}
+    assert result.docs[0].metadata["vector_store_provider"] in {"chroma", "memory"}
 
 
 def test_ai_roadmap_query_retrieves_strategy_source() -> None:
@@ -112,3 +114,13 @@ def test_ai_adjacent_off_topic_query_stays_low_confidence() -> None:
 
     assert result.source.grounded is False
     assert result.source.score < 0.55
+
+
+def test_contact_query_uses_contact_metadata() -> None:
+    result = HybridRetriever(KB_DIR).retrieve(
+        "How do I schedule a discovery call with Jeffrey?",
+        top_k=5,
+    )
+
+    assert result.source.grounded is True
+    assert result.source.label == "Contacting EdStratum Labs"
