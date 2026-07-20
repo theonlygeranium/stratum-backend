@@ -51,6 +51,7 @@ HYPE_PATTERNS = [
 ]
 DISCRETION_PATTERNS = [
     "jeffrey",
+    "james",
     "calendly",
 ]
 FABRICATION_PATTERNS = [

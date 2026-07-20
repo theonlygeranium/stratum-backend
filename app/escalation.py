@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import html
+import hashlib
 import json
 import re
 import time
@@ -18,6 +19,7 @@ RESEND_FALLBACK_FROM_EMAIL = "onboarding@resend.dev"
 RATE_LIMIT_MAX_EMAILS = 3
 RATE_LIMIT_WINDOW_SECONDS = 60 * 60
 _ESCALATION_SENDS: dict[str, list[float]] = {}
+_LOG_FILENAME_PATTERN = re.compile(r"[^A-Za-z0-9._-]+")
 
 EXPLICIT_KEYWORDS = [
     "talk to jeffrey",
@@ -242,6 +244,21 @@ def _consume_rate_limit(session_id: str) -> bool:
     return True
 
 
+def _safe_log_path(log_dir: Path, session_id: Any) -> Path:
+    raw_session_id = str(session_id)
+    stem = _LOG_FILENAME_PATTERN.sub("-", raw_session_id).strip(".-") or "session"
+    if stem != raw_session_id or len(stem) > 80:
+        digest = hashlib.sha256(raw_session_id.encode("utf-8")).hexdigest()[:12]
+        stem = f"{stem[:67]}-{digest}"
+
+    base_dir = log_dir.resolve()
+    path = (base_dir / f"{stem}.json").resolve()
+    if path.parent != base_dir:
+        digest = hashlib.sha256(raw_session_id.encode("utf-8")).hexdigest()[:12]
+        return base_dir / f"session-{digest}.json"
+    return path
+
+
 async def send_or_log_escalation(
     settings: Settings,
     payload: dict[str, Any],
@@ -249,7 +266,7 @@ async def send_or_log_escalation(
     suppress_notifications: bool = False,
 ) -> EscalationDelivery:
     settings.escalation_log_dir.mkdir(parents=True, exist_ok=True)
-    log_path = Path(settings.escalation_log_dir) / f"{payload['session_id']}.json"
+    log_path = _safe_log_path(settings.escalation_log_dir, payload["session_id"])
     log_path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
 
     if suppress_notifications:

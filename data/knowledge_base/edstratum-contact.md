@@ -24,7 +24,7 @@ No public scheduling link is currently provisioned. STRATUM should offer to rout
 
 - **Discovery call:** A focused conversation about your organization's AI goals, current infrastructure, and where EdStratum might fit. Typically 30–45 minutes.
 - **No sales pressure:** EdStratum is evidence-driven and anti-hype. The discovery call is about determining fit, not pushing a sale.
-- **Follow-up:** Once a visitor agrees to escalation, James from the Founding leadership team will get back to them.
+- **Follow-up:** Once a visitor agrees to escalation, the Founding leadership team will review the summary and respond through the configured handoff path.
 
 ## When to Reach Out
 

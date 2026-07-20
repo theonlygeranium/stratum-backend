@@ -12,6 +12,7 @@ from app.config import get_settings
 from app.escalation import send_or_log_escalation
 from app.models import (
     ChatRequest,
+    DoneEvent,
     ErrorEvent,
     EscalationDelivery,
     EscalationRequest,
@@ -100,6 +101,7 @@ async def chat(request: ChatRequest, http_request: Request) -> StreamingResponse
                     ),
                 )
             )
+            yield sse_event(DoneEvent(type="done"))
 
     return StreamingResponse(
         stream(),

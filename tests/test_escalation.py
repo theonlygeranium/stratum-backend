@@ -135,6 +135,36 @@ def test_qa_suppression_skips_resend_call(monkeypatch, tmp_path) -> None:
     assert result.messageId == "qa-suppressed"
 
 
+def test_escalation_log_filename_is_sanitized(tmp_path) -> None:
+    session_id = "../unsafe/session id"
+    result = asyncio.run(
+        send_or_log_escalation(
+            _settings(tmp_path),
+            {
+                "conversation_transcript": "USER: hello",
+                "readiness_snapshot": None,
+                "intent_category": "open",
+                "key_signals": {},
+                "escalation_trigger": "explicit",
+                "visitor_contact": {"email": None, "phone": None},
+                "session_id": session_id,
+                "timestamp": "2026-07-20T00:00:00+00:00",
+            },
+            suppress_notifications=True,
+        )
+    )
+
+    files = list(tmp_path.glob("*.json"))
+    assert result.status == "suppressed"
+    assert len(files) == 1
+    assert files[0].parent.resolve() == tmp_path.resolve()
+    assert files[0].name.endswith(".json")
+    assert "/" not in files[0].name
+    assert ".." not in files[0].name
+    assert not (tmp_path.parent / "unsafe").exists()
+    assert '"session_id": "../unsafe/session id"' in files[0].read_text()
+
+
 def test_escalation_rate_limit_is_per_session(monkeypatch, tmp_path) -> None:
     calls = 0
     _ESCALATION_SENDS.clear()

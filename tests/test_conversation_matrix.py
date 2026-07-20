@@ -95,6 +95,7 @@ def test_representative_conversation_matrix(scenario: dict[str, Any]) -> None:
     text = "".join(event.get("token", "") for event in events)
     assert "I am human" not in text
     assert "I'm human" not in text
+    assert "james" not in text.lower()
 
 
 def test_confidence_escalates_after_two_low_confidence_turns() -> None:

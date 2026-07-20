@@ -19,6 +19,7 @@ from app.graph import (
 from app.models import (
     ChatRequest,
     EscalationDelivery,
+    PhaseEvent,
     ReadinessSnapshot,
     SourceConfidence,
     StratumResult,
@@ -485,6 +486,46 @@ def test_chat_stream_uses_sse_headers() -> None:
     assert response.headers["content-type"].startswith("text/event-stream")
     assert response.headers["cache-control"] == "no-cache"
     assert response.headers["x-accel-buffering"] == "no"
+
+
+def test_chat_stream_error_path_still_emits_terminal_done(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def failing_stream(
+        request: ChatRequest,
+        *,
+        suppress_notifications: bool = False,
+    ):
+        assert request.session_id == "contract-error-terminal-done"
+        assert suppress_notifications is True
+        yield PhaseEvent(type="phase", phase="searching")
+        raise RuntimeError("forced stream failure")
+
+    monkeypatch.setattr(main_module.agent, "stream", failing_stream)
+
+    response = client.post(
+        "/api/chat",
+        headers={"X-Stratum-Eval": "true"},
+        json={
+            "messages": [
+                {
+                    "role": "user",
+                    "content": "Trigger a forced stream failure.",
+                    "timestamp": 0,
+                }
+            ],
+            "mode": "open",
+            "intakeIndex": None,
+            "intakeAnswers": {},
+            "sessionId": "contract-error-terminal-done",
+        },
+    )
+
+    events = _events(response.text)
+    assert response.status_code == 200
+    assert [event["type"] for event in events] == ["phase", "error", "done"]
+    assert events[1]["message"].startswith("STRATUM hit an internal error")
+    assert events[-1] == {"type": "done", "snapshot": None, "escalate": None}
 
 
 def test_explicit_escalation() -> None:
