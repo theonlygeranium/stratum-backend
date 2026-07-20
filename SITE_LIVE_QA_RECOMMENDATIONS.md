@@ -16,11 +16,11 @@ Earlier notes that the frontend source was missing are now superseded. The sourc
 - Site: `https://edstratumlabs.ai`
 - Cloudflare Pages project: `edstratumlabs`
 - Cloudflare source: GitHub repo `theonlygeranium/edstratum-v2-frontend`
-- Latest frontend production code-bearing commit verified: `a2a9551`
-- Latest verified code-bearing frontend manifest commit: `a2a9551`; docs-only pushes can advance the manifest git SHA while leaving code-bearing asset hashes unchanged.
-- Current production entry asset: `/assets/index-y7cgbAE2.js`
+- Latest frontend production code-bearing commit verified: `36f201f`
+- Latest verified code-bearing frontend manifest commit: `36f201f`; docs-only pushes can advance the manifest git SHA while leaving code-bearing asset hashes unchanged.
+- Current production entry asset: `/assets/index-Cld5-OrE.js`
 - Current production stylesheet asset: `/assets/index-DH0EGGDC.css`
-- Current STRATUM chat asset: `/assets/StratumChat-YqNBO1Mg.js`
+- Current STRATUM chat asset: `/assets/StratumChat-5iN0axbq.js`
 - Current PDF snapshot assets: `/assets/stratumPDF-Bgc_chGe.js`, `/assets/pdf-vendor-B7fMFYQc.js`
 - Current public build manifest: `https://edstratumlabs.ai/build-manifest.json`
 - Backend: `https://stratum-backend-production-a340.up.railway.app`
@@ -93,6 +93,10 @@ Earlier notes that the frontend source was missing are now superseded. The sourc
   - Frontend commit `a2a9551` adds D1 session deletion, admin retention purge, reset-time persisted-session deletion, `idx_sessions_last_active`, same-origin microphone policy, and same-origin `/api/tts` fail-closed behavior unless runtime `voiceEnabled` is true.
   - Local frontend QA passed on 2026-07-20: `npm run type-check`, `npm run lint`, `npm run build`, `npx wrangler pages functions build`, focused Functions tests (`42 passed`), focused persistence tests (`12 passed`), focused voice tests (`16 passed`), and full Playwright with one worker (`138 passed`).
   - Hosted main CI `29736780944` passed with `138 passed`, Cloudflare Pages production succeeded, and live `/build-manifest.json` returned commit `a2a9551`, entry asset `/assets/index-y7cgbAE2.js`, chat asset `/assets/StratumChat-YqNBO1Mg.js`, 13 assets, and `Cache-Control: public, max-age=60, must-revalidate`. Live root headers include `Permissions-Policy: camera=(), microphone=(self), geolocation=(), payment=()`, and live `/api/tts` returns `503` with `detail: "tts_disabled"` while `/api/config` returns `voiceEnabled: false`.
+- Frontend privacy-safe analytics update:
+  - Frontend commit `36f201f` adds typed and property-whitelisted STRATUM analytics events for chat open, first message, readiness completion, backend error, and handoff intent; a same-origin `/api/analytics` Pages Function that stores aggregate daily counters only when `ANALYTICS_EVENTS` is bound; and browser/Functions tests proving prompt text, intake answers, raw session IDs, and unsafe properties are not stored.
+  - Local frontend QA passed on 2026-07-20: `npm run type-check`, `npm run lint`, `npm run build`, `npx wrangler pages functions build`, focused analytics Functions tests (`10 passed`), focused analytics browser tests (`8 passed`), and full Playwright with one worker (`156 passed`).
+  - Hosted main CI `29738422278` passed with `156 passed`, Cloudflare Pages production succeeded, and live `/build-manifest.json` returned commit `36f201f`, entry asset `/assets/index-Cld5-OrE.js`, chat asset `/assets/StratumChat-5iN0axbq.js`, 13 assets, and `Cache-Control: public, max-age=60, must-revalidate`. Live `/api/analytics` currently returns `503` with `error: "analytics_not_configured"` and `Cache-Control: no-store` because the analytics KV binding is not active.
 - RAG provider path update:
   - Backend commit `41b2ae9` adds modeled Pinecone settings, OpenAI/Pinecone provider plumbing through `StratumAgent` and `HybridRetriever`, direct Pinecone upsert/query support in `DenseVectorIndex`, Chroma/memory fallback on setup or query failure, and eval harness provider configuration.
   - Local backend QA passed on 2026-07-20: focused config/vector/RAG/runtime tests (`65 passed, 1 skipped`), full pytest (`129 passed, 1 skipped`), RAG eval (`passed: true`, recall@10 `1.0`, groundedness proxy `1.0`), and `pip install --dry-run -r requirements.txt` resolved `pinecone-7.3.0`.
@@ -132,12 +136,14 @@ Earlier notes that the frontend source was missing are now superseded. The sourc
 - Backend commit `3d6387a` adds the hosted backend CI gate hardening and keeps custom status context `Backend CI / pytest-and-rag`.
 - Frontend commit `43ce52e` adds preview/staging-only `VITE_STRATUM_QA=true` support for `X-Stratum-QA: true`; leave it unset in production.
 - Frontend commit `a2a9551` adds D1 deletion/retention purge primitives, same-origin microphone policy readiness, and same-origin `/api/tts` runtime fail-closed behavior.
+- Frontend commit `36f201f` adds privacy-safe aggregate chatbot analytics readiness and same-origin `/api/analytics`, gated by the optional Cloudflare KV binding `ANALYTICS_EVENTS`.
 - Backend commit `728f217` keeps deploy helpers aligned with current runtime env names and makes optional managed RAG/TTS variables explicit without printing secret values.
 
 ## Current SOT Blockers
 
 - GitHub branch protection for frontend `main` is not configured to require `CI / build-and-test`; this is still a release-governance blocker. A GitHub API attempt on 2026-07-20 returned HTTP 403 requiring GitHub Pro or a public repository before branch protection can be enabled.
 - Cloudflare KV rate limiting is not active in production. Live rapid `/api/config` probes did not produce HTTP 429, and the middleware skips enforcement until `RATE_LIMIT` is bound.
+- Cloudflare analytics aggregation is not active in production. Live `/api/analytics` returns `503 analytics_not_configured` until `ANALYTICS_EVENTS` is bound.
 - Cloudflare D1 conversation persistence is not active. `/api/config` returns `persistenceEnabled: false`, and `/api/sessions/.../messages` returns `503 d1_not_configured`.
 - Voice/TTS is not active in production. `/api/config` returns `voiceEnabled: false`, `/api/health` reports `tts.status: "unconfigured"`, and live same-origin `/api/tts` fails closed with `503 tts_disabled` while runtime voice is disabled.
 - Backend runtime reports `embedding_provider: "hash"` and `vector_store_provider: "chroma"`; the OpenAI/Pinecone path is now source-ready and locally tested, but production still needs Railway env activation before the managed provider path is live.
@@ -200,5 +206,5 @@ Earlier notes that the frontend source was missing are now superseded. The sourc
 8. Add branch protection for backend `main` requiring `Backend CI / pytest-and-rag`, and keep frontend `CI / build-and-test` required once GitHub plan controls allow it.
 9. Use `/build-manifest.json` as the first frontend deploy verification check before deeper rendered QA.
 10. Prefer scoped Cloudflare deploy tokens over global credentials, and keep deploy credentials out of checked-in files.
-11. Add privacy-safe chatbot funnel analytics for open, first message, readiness completion, backend error, and handoff intent events.
+11. Bind Cloudflare KV namespace `ANALYTICS_EVENTS` to activate the source-ready aggregate chatbot analytics counters, then verify `/api/analytics` returns `202` for an allowlisted test event.
 12. Upgrade or repin GitHub Actions once Node 24-native versions are available for the currently annotated actions.
