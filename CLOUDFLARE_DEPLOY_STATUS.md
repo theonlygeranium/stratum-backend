@@ -12,7 +12,7 @@ Checked on 2026-07-20 UTC after frontend rendered live-smoke command deployment 
   `41b2ae9`
 - Latest backend workflow/action-migration commit verified: `f7dced4`
 - Latest backend source/tooling commit verified locally, deployed on Railway,
-  and live-smoked: `5793eee`
+  and live-smoked: `d45f4c9`
 - Docs-only commits can advance Railway deployment metadata without changing
   backend runtime behavior. Verify the current deployment through GitHub commit
   status, Railway deployment status, and public `/api/health` plus `/api/runtime`.
@@ -79,6 +79,14 @@ Current public runtime evidence:
   1 skipped`), RAG eval, pre-deploy live backend smoke, Railway deployment
   success, post-deploy live backend smoke, and frontend same-origin live smoke
   all passed.
+- Backend commit `d45f4c9` adds `scripts/live_release_audit.py` for
+  non-mutating release governance: GitHub branch protection and checks,
+  Cloudflare Pages deployment state, live frontend manifest/runtime flags,
+  Railway deployment status, and backend health/runtime. Local py_compile,
+  public-only audit, full audit with four expected governance blockers, full
+  pytest (`129 passed, 1 skipped`), Railway deployment success, and post-deploy
+  backend live smoke all passed. Full audit currently blocks on frontend/backend
+  branch protection plus the GitHub Actions billing/spending-limit failures.
 - Frontend CI runs type-check, lint, production build, dist manifest assertion,
   pinned Cloudflare Pages Functions build, forbidden-copy scan, and Playwright.
   Latest verified frontend workflow run before the billing blocker was
@@ -108,7 +116,7 @@ Current public runtime evidence:
   voice controls while disabled, mobile dialog bounds, and screenshots under
   `/tmp`. Local checks, Cloudflare Pages deployment, post-deploy `qa:live`, and
   post-deploy `qa:live:rendered` all passed.
-- GitHub Actions run `29744589386` for `52cdf47` failed before starting any
+- GitHub Actions run `29744827315` for `91f2ff1` failed before starting any
   steps because of an account billing/spending-limit blocker; rerun hosted CI
   after billing/settings are corrected.
 - Live same-origin `/api/health` on `https://edstratumlabs.ai` proxies Railway
@@ -130,9 +138,9 @@ Current public runtime evidence:
   `CI / build-and-test` and backend `Backend CI / pytest-and-rag`; current
   account/repo controls previously returned a GitHub plan/permission blocker.
 - GitHub Actions currently has an account billing/spending-limit blocker for the
-  frontend repo; hosted CI for `52cdf47` and later pushes cannot be trusted
-  until the workflow can start and pass. Backend run `29743994131` for
-  `221cf4b` reproduced the same billing/spending-limit annotation before any
+  frontend repo; hosted CI for `91f2ff1` and later pushes cannot be trusted
+  until the workflow can start and pass. Backend run `29745225484` for
+  `d45f4c9` reproduced the same billing/spending-limit annotation before any
   workflow steps started.
 - Cloudflare KV `STRATUM_CONFIG` and `RATE_LIMIT` bindings are not active in
   production.
