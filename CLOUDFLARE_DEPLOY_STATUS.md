@@ -12,7 +12,7 @@ Checked on 2026-07-20 UTC after frontend asset fallback hardening, backend relea
   `41b2ae9`
 - Latest backend workflow/action-migration commit verified: `f7dced4`
 - Latest backend runtime/tooling commit verified locally, deployed on Railway,
-  and live-smoked: `ac6a69a`
+  and live-smoked: `178124e`
 - Docs-only commits can advance Railway deployment metadata without changing
   backend runtime behavior. Verify the current deployment through GitHub commit
   status, Railway deployment status, and public `/api/health` plus `/api/runtime`.
@@ -54,7 +54,7 @@ Current public runtime evidence:
   `bb8f3b4`, rendered live-smoke command commit `52cdf47`, asset-smoke
   hardening commit `7eb42dd`, Pages fallback fix commit `b341b07`, and asset
   hash refresh commit `b51a623` are deployed but hosted CI proof is pending
-  because GitHub Actions run `29748630950` failed before starting any steps due
+  because GitHub Actions run `29749256985` failed before starting any steps due
   to an account billing/spending-limit blocker.
 - Current production metadata endpoint:
   `https://edstratumlabs.ai/build-manifest.json`
@@ -107,6 +107,15 @@ Current public runtime evidence:
   `--include-conversation-matrix` confirmed public runtime and the deployed
   54-scenario matrix while still blocking only on branch protection plus hosted
   GitHub Actions billing/spending-limit failures.
+- Backend commit `178124e` adds `maxIntakeQuestions` to the release-audit
+  frontend runtime expectations, defaulting to the seven-question SOT contract
+  with non-secret CLI/env overrides for future planned intake changes. Local
+  py_compile, focused release-audit tests (`7 passed`), full pytest
+  (`138 passed, 1 skipped`), `git diff --check`, public-only release audit with
+  zero blockers, Railway deployment success, post-deploy backend smoke, and
+  release audit with the deployed 54-scenario matrix all passed. The full audit
+  still blocks only on branch protection plus hosted GitHub Actions
+  billing/spending-limit failures.
 - Frontend CI runs type-check, lint, production build, dist manifest assertion,
   pinned Cloudflare Pages Functions build, forbidden-copy scan, and Playwright.
   Latest verified frontend workflow run before the billing blocker was
@@ -143,7 +152,7 @@ Current public runtime evidence:
   build, and full Playwright (`162 passed`). Post-deploy
   `EXPECTED_MANIFEST_COMMIT=b51a623 npm run qa:live` and
   `EXPECTED_MANIFEST_COMMIT=b51a623 npm run qa:live:rendered` both passed.
-- GitHub Actions run `29748630950` for `b51a623` failed before starting any
+- GitHub Actions run `29749256985` for `0d9a142` failed before starting any
   steps because of an account billing/spending-limit blocker; rerun hosted CI
   after billing/settings are corrected.
 - Live same-origin `/api/health` on `https://edstratumlabs.ai` proxies Railway
@@ -166,9 +175,9 @@ Current public runtime evidence:
   `CI / build-and-test` and backend `Backend CI / pytest-and-rag`; current
   account/repo controls previously returned a GitHub plan/permission blocker.
 - GitHub Actions currently has an account billing/spending-limit blocker for the
-  frontend repo; hosted CI for `b51a623` and later pushes cannot be trusted
-  until the workflow can start and pass. Backend run `29747403438` for
-  `ac6a69a` reproduced the same billing/spending-limit annotation before any
+  frontend repo; hosted CI for `0d9a142` and later pushes cannot be trusted
+  until the workflow can start and pass. Backend run `29749731107` for
+  `178124e` reproduced the same billing/spending-limit annotation before any
   workflow steps started.
 - Cloudflare KV `STRATUM_CONFIG` and `RATE_LIMIT` bindings are not active in
   production.
