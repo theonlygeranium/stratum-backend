@@ -16,11 +16,11 @@ Earlier notes that the frontend source was missing are now superseded. The sourc
 - Site: `https://edstratumlabs.ai`
 - Cloudflare Pages project: `edstratumlabs`
 - Cloudflare source: GitHub repo `theonlygeranium/edstratum-v2-frontend`
-- Latest frontend production code commit verified: `87c4d5d`
-- Current production entry asset: `/assets/index-CntR1RBA.js`
-- Current STRATUM chat asset: `/assets/StratumChat-CKo-w4OW.js`
+- Latest frontend production code commit verified: `e079033`
+- Current production entry asset: `/assets/index-CCzuKg1J.js`
+- Current STRATUM chat asset: `/assets/StratumChat-CzklqdIB.js`
 - Backend: `https://stratum-backend-production-a340.up.railway.app`
-- Latest backend main commit verified by public health/SSE behavior: `3272b67`
+- Latest backend main commit verified by public health/SSE behavior: `fdb357a`
 - Backend runtime previously verified: Writer/Palmyra generation, hash embeddings, Railway Postgres-backed graph/session state
 
 ## QA Summary
@@ -52,6 +52,11 @@ Earlier notes that the frontend source was missing are now superseded. The sourc
   - Live `https://edstratumlabs.ai/api/config` returns `persistenceEnabled: false`.
   - Live `POST https://edstratumlabs.ai/api/sessions` returns `503` with `d1_not_configured` until D1 is bound.
   - Live rendered chat smoke verified no `/api/sessions` requests are made while persistence is disabled.
+- Voice/TTS scaffolding deployed:
+  - Live `https://edstratumlabs.ai/api/config` returns `voiceEnabled: false`.
+  - Live `https://edstratumlabs.ai/api/health` returns `tts: { status: "unconfigured", provider: "elevenlabs" }`.
+  - Live backend `/api/tts` enforces the 500-character request contract; validation-only QA returned HTTP 422 without invoking the provider.
+  - Live rendered chat smoke verified zero voice playback or mic controls appear while the runtime flag remains disabled.
 
 ## Notes For Future Agents
 
@@ -67,6 +72,8 @@ Earlier notes that the frontend source was missing are now superseded. The sourc
 - Frontend commit `2f95db5` adds Cloudflare Pages Functions under `functions/`; `/api/health` proxies Railway `/api/health`, `/api/config` returns non-secret feature flags, and `_middleware.ts` applies best-effort KV rate limiting when `RATE_LIMIT` is bound.
 - Frontend commit `87c4d5d` adds D1 session persistence scaffolding under `functions/api/sessions/`, plus `schema.sql`; persistence remains inactive until `STRATUM_DB`, `SESSION_SECRET`, schema execution, and KV runtime `persistenceEnabled: true` are configured.
 - Backend commit `3272b67` accepts optional `escalationTrigger` and `sentimentSignal` on `/api/chat` requests, preserves them through the graph state, and records `sentiment_signal` in non-secret escalation key signals.
+- Backend commit `fdb357a` adds the ElevenLabs TTS proxy contract at `/api/tts` and `/tts`, guarded by Railway-side `ELEVENLABS_API_KEY` and session-scoped rate limiting.
+- Frontend commit `e079033` adds voice input and TTS UI, gated by Cloudflare runtime `voiceEnabled` plus build-time `VITE_TTS_ENABLED`.
 
 ## Completed Feature 1
 
@@ -97,6 +104,13 @@ Earlier notes that the frontend source was missing are now superseded. The sourc
 - Local QA passed on 2026-07-20: frontend `npm run lint`, `npm run build`, `npx wrangler pages functions build`, focused Function tests (`22 passed`), persistence browser tests (`10 passed`), and full frontend suite (`84 passed`).
 - Production QA passed on 2026-07-20: `/api/config` returns `persistenceEnabled: false`, `/api/sessions` fails closed with `d1_not_configured`, and live rendered chat makes no session endpoint calls while persistence is disabled.
 
+## Completed Feature 6
+
+- Enhancement spec Feature 6 is deployed across frontend and backend: Web Speech API voice input, TTS playback toggle, markdown-stripped TTS payloads, reduced-motion guardrails, and a FastAPI ElevenLabs proxy with 500-character validation plus 10-per-session/minute rate limiting.
+- Backend commit `fdb357a` is pushed to `main`; frontend commit `e079033` is pushed to `main` and loaded in production as `/assets/StratumChat-CzklqdIB.js`.
+- Local QA passed on 2026-07-20: backend pytest (`123 passed, 1 skipped`), backend focused TTS/health/escalation/LLM tests (`9 passed`), frontend `npm run lint`, frontend `npm run build`, `npx wrangler pages functions build`, focused voice tests (`14 passed`), and full frontend suite (`98 passed`).
+- Hosted main CI passed on 2026-07-20 with `98 passed`; production QA used safe paths only: no live TTS generation, `/api/tts` validation-only check returned 422, `/api/config` leaves `voiceEnabled: false`, and rendered production chat shows no voice controls while disabled.
+
 ## Recommended Next Steps
 
 1. Add/verify Cloudflare preview env var `VITE_STRATUM_API_URL` if preview branches should exercise the live backend instead of mock chat.
@@ -104,7 +118,8 @@ Earlier notes that the frontend source was missing are now superseded. The sourc
 3. Keep using `X-Stratum-QA` or `X-Stratum-Eval` for any future live escalation QA unless the user explicitly requests an email test.
 4. Create and bind Cloudflare KV namespaces `STRATUM_CONFIG` and `RATE_LIMIT` once credentials are available.
 5. Create D1 database `stratum-conversations`, run `schema.sql`, bind it as `STRATUM_DB`, add `SESSION_SECRET`, then set KV runtime `persistenceEnabled: true` only after a live smoke plan is ready.
-6. Add CI for `npm ci`, `npm run build`, and forbidden-copy scans.
-7. Add a small public build manifest with git SHA, build timestamp, backend URL, and asset hashes for easier live verification.
-8. Prefer scoped Cloudflare deploy tokens over global credentials, and keep deploy credentials out of checked-in files.
-9. Add privacy-safe chatbot funnel analytics for open, first message, readiness completion, backend error, and handoff intent events.
+6. Configure voice/TTS only after a safe rollout plan: Railway `ELEVENLABS_API_KEY`, optional `ELEVENLABS_VOICE_ID`, Cloudflare Pages `VITE_TTS_ENABLED=true`, then KV runtime `voiceEnabled: true`.
+7. Add CI for `npm ci`, `npm run build`, and forbidden-copy scans.
+8. Add a small public build manifest with git SHA, build timestamp, backend URL, and asset hashes for easier live verification.
+9. Prefer scoped Cloudflare deploy tokens over global credentials, and keep deploy credentials out of checked-in files.
+10. Add privacy-safe chatbot funnel analytics for open, first message, readiness completion, backend error, and handoff intent events.
