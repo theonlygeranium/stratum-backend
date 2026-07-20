@@ -62,7 +62,7 @@ class StratumAgent:
             confidence_threshold=settings.confidence_threshold,
             embedding_provider=settings.embedding_provider,
             embedding_model=settings.embedding_model,
-            embedding_api_key=settings.llm_api_key,
+            embedding_api_key=settings.openai_api_key,
             vector_store_provider=settings.vector_store_provider,
             chroma_persist_dir=settings.chroma_persist_dir,
             reranker_provider=settings.reranker_provider,
@@ -101,7 +101,7 @@ class StratumAgent:
             "reranker_provider": self.retriever.reranker_provider,
             "reranker_model": self.retriever.reranker_model,
             "llm_configured": bool(self.settings.llm_api_key),
-            "openai_api_key_configured": bool(os.getenv("OPENAI_API_KEY")),
+            "openai_api_key_configured": bool(self.settings.openai_api_key),
             "resend_configured": bool(self.settings.resend_api_key),
             "jeffrey_email_configured": bool(self.settings.jeffrey_email),
             "notifications_configured": bool(

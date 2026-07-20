@@ -21,6 +21,7 @@ def test_provider_defaults_select_production_services_when_keys_exist(
     monkeypatch,
 ) -> None:
     monkeypatch.setenv("OPENAI_API_KEY", "test-openai-key")
+    monkeypatch.setenv("LLM_API_KEY", "test-llm-key")
     monkeypatch.setenv("COHERE_API_KEY", "test-cohere-key")
     monkeypatch.delenv("EMBEDDING_PROVIDER", raising=False)
     monkeypatch.delenv("RERANKER_PROVIDER", raising=False)
@@ -28,6 +29,8 @@ def test_provider_defaults_select_production_services_when_keys_exist(
     settings = get_settings()
 
     assert settings.embedding_provider == "openai"
+    assert settings.openai_api_key == "test-openai-key"
+    assert settings.llm_api_key == "test-llm-key"
     assert settings.reranker_provider == "cohere"
     assert settings.cohere_api_key == "test-cohere-key"
 

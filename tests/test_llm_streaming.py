@@ -22,6 +22,7 @@ def _settings() -> Settings:
         chroma_persist_dir=None,
         reranker_provider="heuristic",
         reranker_model="rerank-v4.0-fast",
+        openai_api_key=None,
         cohere_api_key=None,
         llm_api_key="test-key",
         llm_base_url="https://llm.example/v1/chat/completions",

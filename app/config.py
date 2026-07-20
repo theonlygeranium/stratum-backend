@@ -23,6 +23,7 @@ class Settings:
     chroma_persist_dir: Path | None
     reranker_provider: str
     reranker_model: str
+    openai_api_key: str | None
     cohere_api_key: str | None
     llm_api_key: str | None
     llm_base_url: str
@@ -73,6 +74,7 @@ def get_settings() -> Settings:
             or ("cohere" if cohere_api_key else "heuristic")
         ),
         reranker_model=os.getenv("RERANKER_MODEL", "rerank-v4.0-fast"),
+        openai_api_key=openai_api_key,
         cohere_api_key=cohere_api_key,
         # LLM provider — configurable via env vars.
         # Defaults to OpenAI (api.openai.com / gpt-4o).
