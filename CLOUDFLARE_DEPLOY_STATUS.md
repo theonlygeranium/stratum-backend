@@ -9,7 +9,7 @@ and discretion-safe escalation copy update.
 - GitHub repository: `theonlygeranium/stratum-backend`
 - Branch: `main`
 - Railway project/environment: `sunny-ambition / production`
-- Latest verified Railway-backed commit: `f1c390f`
+- Latest verified code commit: `f1c390f`
 - Railway deployment status: `success` for `sunny-ambition - stratum-backend`
   through GitHub deployment status and live health/runtime checks.
 - Public backend URL: `https://stratum-backend-production-a340.up.railway.app`
