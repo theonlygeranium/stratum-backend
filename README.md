@@ -46,12 +46,16 @@ curl -N -X POST http://localhost:8000/api/chat \
 
 Copy `.env.example` to `.env` for local development. The backend starts without provider keys and uses deterministic fallback responses so contract tests can run offline.
 
-Required demo variables:
+Production variables:
 
 - `WRITER_API_KEY`: enables WRITER Palmyra chat generation. The default chat endpoint is `https://api.writer.com/v1/chat/completions` with model `palmyra-x5`.
 - `DATABASE_URL`: enables Postgres-backed session state and LangGraph checkpoint attempts.
 - `RESEND_API_KEY`: enables escalation emails.
-- `JEFFREY_EMAIL`: destination for escalation emails.
+- `ESCALATION_EMAIL_TO`: destination for escalation emails.
+- `ESCALATION_EMAIL_FROM`: optional sender address. Defaults to
+  `stratum@edstratumlabs.ai` and falls back to Resend's default sender if the
+  domain sender is not accepted. Legacy `JEFFREY_EMAIL` and
+  `RESEND_FROM_EMAIL` aliases are still accepted for older Railway projects.
 - `ALLOWED_ORIGINS`: comma-separated CORS origins.
 
 Useful optional variables:
@@ -75,9 +79,8 @@ Useful optional variables:
 - `RERANKER_PROVIDER`: leave unset/blank for auto mode (`cohere` when
   `COHERE_API_KEY` is present, otherwise `heuristic`), or set explicitly.
 - `RERANKER_MODEL`: default `rerank-v4.0-fast`.
-- `RESEND_FROM_EMAIL`: optional sender address. Defaults to
-  `stratum@edstratumlabs.ai` and falls back to Resend's default sender if the
-  domain sender is not accepted.
+- `ELEVENLABS_API_KEY`: optional server-side key for `/api/tts`.
+- `ELEVENLABS_VOICE_ID`: optional ElevenLabs voice override.
 
 ## Verification
 

@@ -1,82 +1,91 @@
 # STRATUM Deploy Status
 
-Checked on 2026-07-20 after the Railway-backed STRATUM deployment,
-runtime-diagnostics pass, OpenAI embedding wiring fix, Resend sender fallback,
-and discretion-safe escalation copy update.
+Checked on 2026-07-20 UTC after backend CI hardening and frontend public
+build-manifest deployment.
 
 ## Backend
 
 - GitHub repository: `theonlygeranium/stratum-backend`
 - Branch: `main`
 - Railway project/environment: `sunny-ambition / production`
-- Latest verified code commit: `f1c390f`
-- Railway deployment status: `success` for `sunny-ambition - stratum-backend`
-  through GitHub deployment status and live health/runtime checks.
 - Public backend URL: `https://stratum-backend-production-a340.up.railway.app`
-- Health check: `GET /api/health` returns `{"status":"healthy","stratum":"online","backend_enabled":true}`
-- Runtime diagnostics: `GET /api/runtime` reports `graph_runtime=langgraph`,
-  `checkpointer=postgres`, `database_configured=true`,
-  `session_store_backend=postgres`, `embedding_provider=openai`,
-  `vector_store_provider=chroma`, `llm_configured=true`,
-  `openai_api_key_configured=true`, `notifications_configured=true`,
-  `escalation_email_configured=true`,
-  `allowed_origins_env_configured=true`, and
+- Latest backend code-bearing commit verified for managed RAG plumbing:
+  `41b2ae9`
+- Latest backend CI hardening commit verified: `3d6387a`
+- Docs-only commits can advance Railway deployment metadata without changing
+  backend runtime behavior. Verify the current deployment through GitHub commit
+  status, Railway deployment status, and public `/api/health` plus `/api/runtime`.
+
+Current public runtime evidence:
+
+- `GET /api/health` returns healthy STRATUM status with `backend_enabled: true`,
+  RAG `status: "ok"`, `vectorStoreConnected: true`, and TTS
+  `status: "unconfigured"` / `provider: "elevenlabs"`.
+- `GET /api/runtime` reports `graph_runtime=langgraph`,
+  `database_configured=true`, `session_store_backend=postgres`,
+  `embedding_provider=hash`, `vector_store_provider=chroma`,
+  `reranker_provider=heuristic`, `llm_configured=true`,
+  `llm_provider=writer`, `openai_api_key_configured=true`,
+  `notifications_configured=true`, `allowed_origins_env_configured=true`, and
   `required_cors_origins_present=true`.
-- Production escalation routing: `JEFFREY_EMAIL` is set in Railway to the
-  private owner inbox supplied out-of-band; `CALENDLY_URL` is intentionally blank
-  until a scheduling link is provisioned.
+- Managed OpenAI/Pinecone retrieval is source-ready but not active in
+  production until Railway sets `EMBEDDING_PROVIDER=openai`,
+  `VECTOR_STORE_PROVIDER=pinecone`, `PINECONE_API_KEY`, `PINECONE_INDEX`, and
+  optional `PINECONE_NAMESPACE`.
+- Voice/TTS is source-ready but inactive until Railway sets
+  `ELEVENLABS_API_KEY` and the frontend/Cloudflare runtime flags are enabled.
 
 ## Cloudflare Pages
 
 - Pages project: `edstratumlabs`
-- Production aliases: `https://edstratumlabs.ai`, `https://www.edstratumlabs.ai`
-- Pages deployment id: `820a3bbe-ba74-4f80-9e44-dc2e11b1aa5d`
-- Pages deployment status: `success`
-- Production build-time env var: `VITE_STRATUM_API_URL=https://stratum-backend-production-a340.up.railway.app`
-- Live lazy STRATUM chunk (`StratumChat-cfHiQN2_.js` as of this check) includes the Railway URL, `/api/chat`, `fetch(...)`, and `Accept: text/event-stream`.
+- Production aliases: `https://edstratumlabs.ai`,
+  `https://www.edstratumlabs.ai`
+- Frontend GitHub repository: `theonlygeranium/edstratum-v2-frontend`
+- Latest frontend code-bearing manifest commit verified: `c5f6431`
+- Current production metadata endpoint:
+  `https://edstratumlabs.ai/build-manifest.json`
+- The manifest intentionally exposes only non-secret deployment metadata:
+  git SHA, branch, build timestamp, backend URL, hashed asset paths, sizes, and
+  SHA-256 hashes. Docs-only frontend pushes can advance the manifest SHA while
+  code-bearing asset hashes remain unchanged.
+- Production build-time env var `VITE_STRATUM_API_URL` is configured in
+  Cloudflare Pages; source also includes a production-host fallback to
+  `https://stratum-backend-production-a340.up.railway.app`.
+- Preview env vars may omit `VITE_STRATUM_API_URL`, so preview chat can run in
+  mock mode unless Cloudflare Preview settings are updated.
 
 ## Verification
 
-- Backend test suite: `108 passed, 1 skipped, 2 warnings`
-- Optional Postgres checkpoint smoke: passed locally with `STRATUM_TEST_DATABASE_URL`.
-- RAG acceptance harness: `20` local golden questions passed with Recall@10 `1.0`, groundedness proxy `1.0`, retrieval p50 `1.77ms` / p95 `2.31ms`, and no-key first-token latency `11.11ms`.
-- `/api/chat` SSE now uses the compiled LangGraph runtime for direct escalation, intake, about, and open Q&A. Open Q&A streams the graph-prepared retrieval/source state before LLM tokens, then checkpoints the generated result through the graph `generate` node.
-- Escalation handoff copy is notification-status-aware and discretion-safe: it refers to EdStratum's Founding leadership team, does not mention the owner by name, says a summary was sent only when the Resend handoff succeeds, and names James from the Founding leadership team only after delivery succeeds.
-- Direct escalation routing now uses phrase-level handoff requests rather than broad single-word triggers, with sentiment/frustration detection taking priority for documented frustration phrases.
-- Deployed Phase 4 conversation matrix: `54` live turns passed with contract pass rate `1.0`, expected behavior `1.0`, persona consistency `1.0`, no-hallucination proxy `1.0`, snapshot delivery `1.0`, scripted escalation rate `0.2037`, abandonment proxy `0.0`, and first-token latency p50 `222.79ms` / p95 `406.67ms` / max `573.5ms`.
-- OpenAI-compatible provider streaming path: covered by parser and progressive-stream contract tests.
-- Docker build: passed with the Railway-compatible `${PORT:-8000}` command.
-- Secret/token scan: no matches in tracked backend source.
-- Live backend SSE smoke test: passed for open/about/escalation paths.
-- Live non-eval Resend escalation smoke: passed; the production SSE response
-  confirmed a leadership-team summary was sent and completed with
-  `DONE escalate=explicit`.
-- Live eval-suppressed escalation smoke: passed; response used Founding
-  leadership team copy, omitted James until delivery, and omitted calendar links.
-- Live progressive streaming spot check: graph-backed open Q&A emitted `searching`, `retrieving`, `composing`, `source`, then tokens; first SSE event in `102.36ms`.
-- Live CORS preflight from `https://edstratumlabs.ai`: passed.
-- Live frontend SEO tags: meta description, canonical, OG title, and OG description present.
-- Live static files: `/robots.txt`, `/sitemap.xml`, `/og-image.png`, `/_headers`, and `/_redirects` all return HTTP 200.
+- Backend hosted CI status context: `Backend CI / pytest-and-rag`
+- Frontend hosted CI status context: `CI / build-and-test`
+- Backend CI runs `pytest -q`, `scripts/eval_rag.py --json` with Bash
+  `pipefail`, and uploads `rag-eval-report.json` every run.
+- Frontend CI runs type-check, lint, production build, dist manifest assertion,
+  forbidden-copy scan, and Playwright. Latest verified frontend manifest run
+  passed with `124` Playwright tests.
+- Live same-origin `/api/health` on `https://edstratumlabs.ai` proxies Railway
+  and returns healthy status.
+- Live `/api/config` currently returns `ragEnabled: true`,
+  `voiceEnabled: false`, `persistenceEnabled: false`, and
+  `maxIntakeQuestions: 6`.
+- Live build manifest returns HTTP 200 with
+  `Cache-Control: public, max-age=60, must-revalidate`, the Railway backend URL,
+  13 hashed assets, and matching SHA-256 for the served STRATUM chat chunk.
+- Escalation QA must use `X-Stratum-QA`, `X-Stratum-Eval`, or intercepted SSE.
+  Do not trigger live email delivery unless explicitly requested.
 
-## Known Scope Notes
+## Remaining Control-Plane Work
 
-- LangGraph routing exposes the executable spec topology: `route`, `open`,
-  `intake`, `assess`, `about`, `escalation`, `notify`, and shared terminal
-  `generate`; PostgresSaver checkpoint support is implemented and production
-  runtime verification confirms `checkpointer=postgres`.
-- The diagram-only `rag`, `persona`, and `handoff` labels are consolidated into
-  branch handlers, matching the spec's executable edge sample while preserving
-  open-mode retrieval, persona/about, escalation, SSE streaming, and
-  checkpointing behavior.
-- Retrieval now uses `rank_bm25`, Chroma-backed dense retrieval, RRF-style fusion, and OpenAI embeddings in production; no-key local/demo runs use deterministic hash embeddings.
-- Reranking auto-selects Cohere cross-encoder reranking when `COHERE_API_KEY` is present; the demo Railway env skips Cohere and uses heuristic reranking as allowed by the deploy directive.
-- Acceptance metrics run locally through `scripts/eval_rag.py` and against
-  Railway through `scripts/eval_deployed_conversations.py`; passive production
-  traffic analytics for real visitor escalation and abandonment are not
-  instrumented in this demo build.
-
-## Notes
-
-- Railway CLI agent support and the `use-railway` skill are installed and up to date. The official local MCP is configured; OAuth login is required for `railway agent`.
-- Custom Railway MCP is configured in Codex as `railway-mcp` with bearer auth via `RAILWAY_CUSTOM_MCP_BEARER_TOKEN`; direct MCP verification returned server `railway_mcp` version `1.28.1` and all `9` tools.
-- Cloudflare credentials remain only in the sensitive handoff attachment and were not committed to this repository.
+- GitHub branch protection still needs required checks for frontend
+  `CI / build-and-test` and backend `Backend CI / pytest-and-rag`; current
+  account/repo controls previously returned a GitHub plan/permission blocker.
+- Cloudflare KV `STRATUM_CONFIG` and `RATE_LIMIT` bindings are not active in
+  production.
+- Cloudflare D1 persistence is not active until `STRATUM_DB`, `SESSION_SECRET`,
+  schema execution, and runtime `persistenceEnabled: true` are configured.
+- Railway managed RAG provider activation is pending as described above.
+- Voice/TTS activation is pending Railway ElevenLabs credentials plus frontend
+  and runtime feature flags.
+- Hosted GitHub Actions currently annotate Node.js 20 action deprecation and
+  forced Node.js 24 compatibility. Runs pass, but action versions should be
+  watched before the compatibility path changes.

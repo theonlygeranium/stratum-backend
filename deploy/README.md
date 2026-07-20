@@ -5,8 +5,8 @@ This backend deploys separately from the existing React/Vite frontend. The backe
 ## Current Workspace Limits
 
 - Backend source is present at `/home/z121532/edstratum-v2/stratum_backend`.
-- Frontend source is not present at `/workspace/edstratum-v2`.
-- No verified frontend `dist/` artifact is present in this workspace.
+- Frontend source is expected at sibling repo `/home/z121532/edstratum-v2/edstratum-v2-frontend` in this project hub. Override `FRONTEND_ROOT` when running from another workspace.
+- Frontend `dist/` is generated from source by `npm run build`; do not patch deployed Cloudflare bundle artifacts unless source is unavailable and the fix is urgent.
 - Railway/Fly credentials are not available in this shell.
 - Cloudflare credentials live only in the sensitive handoff attachment and should not be copied into docs or committed files.
 
@@ -22,7 +22,7 @@ Run the read-only preflight any time the environment changes:
 2. Verify `GET /api/health` on the production backend returns `backend_enabled: true`.
 3. Set `STRATUM_BACKEND_URL` to that production backend URL.
 4. Set `VITE_STRATUM_API_URL` as a Cloudflare Pages production build-time environment variable.
-5. Rebuild and redeploy the frontend from a workspace that contains the React/Vite frontend source or a verified `dist/` artifact with `index.html`, `robots.txt`, `sitemap.xml`, `og-image.png`, `_headers`, and `_redirects`.
+5. Rebuild and redeploy the frontend from the React/Vite frontend source, then verify `index.html`, `build-manifest.json`, `robots.txt`, `sitemap.xml`, `og-image.png`, `_headers`, and `_redirects`.
 6. Verify live SEO assets and the frontend-to-backend connection.
 
 Do not run the Cloudflare mutation step until steps 1-3 are complete.
@@ -41,7 +41,7 @@ Use `scripts/set_cloudflare_pages_env.sh` only after the backend URL is live:
 
 ```bash
 DRY_RUN=1 \
-STRATUM_BACKEND_URL=https://stratum.edstratumlabs.ai \
+STRATUM_BACKEND_URL=https://stratum-backend-production-a340.up.railway.app \
 ./scripts/set_cloudflare_pages_env.sh
 ```
 
@@ -49,7 +49,7 @@ To perform the actual Cloudflare Pages env update, export Cloudflare credentials
 
 ```bash
 CONFIRM_CLOUDFLARE_ENV_UPDATE=yes \
-STRATUM_BACKEND_URL=https://stratum.edstratumlabs.ai \
+STRATUM_BACKEND_URL=https://stratum-backend-production-a340.up.railway.app \
 ./scripts/set_cloudflare_pages_env.sh
 ```
 

@@ -1,37 +1,12 @@
-# STRATUM Frontend Integration Patch
+# STRATUM Frontend Integration Status
 
-The attached frontend contract clarifies that the live Phase 1 component still calls `mockStreamResponse()` directly. Setting `VITE_STRATUM_API_URL` alone will not connect the backend until the React source adds a fetch/SSE adapter.
+The original Phase 1 patch note in this directory is superseded. The frontend source now lives at `/home/z121532/edstratum-v2/edstratum-v2-frontend`, and the STRATUM chat already includes the backend SSE adapter under `src/stratum/stratumApi.ts`.
 
-When the frontend repo is available, apply this minimal patch:
+Current behavior:
 
-1. Copy `stratumApi.ts` into `src/stratum/stratumApi.ts`.
-2. In `src/stratum/StratumChat.tsx`, import `streamFromBackend` from `./stratumApi`.
-3. Also import `STRATUM_SESSION_KEY` from `./stratumConfig`.
-4. Add a stable `sessionId` state backed by `sessionStorage`.
-5. In `handleSubmit`, build `nextMessages = [...messages, userMessage]` before `setMessages(nextMessages)`.
-6. Replace each `mockStreamResponse(...)` call with a conditional:
+- Production `edstratumlabs.ai` and `www.edstratumlabs.ai` use the Railway backend URL from `VITE_STRATUM_API_URL`, with a production-host fallback to `https://stratum-backend-production-a340.up.railway.app`.
+- Local development and Cloudflare preview branches use mock mode when `VITE_STRATUM_API_URL` is unset, which is the safe default for UI QA because it cannot send live handoff emails.
+- Same-origin Cloudflare Pages Functions proxy `/api/health`, `/api/config`, `/api/escalate`, `/api/tts`, and D1-backed `/api/sessions` routes when the corresponding bindings and runtime flags are configured.
+- Public deployment metadata is available at `/build-manifest.json` and should be the first live verification check after each frontend production deploy.
 
-```typescript
-const stream = STRATUM_BACKEND_ENABLED
-  ? streamFromBackend(nextMessages, mode, intakeIndex, intakeAnswers, sessionId)
-  : mockStreamResponse(text, mode, intakeAnswers, false)
-```
-
-For the intake-complete branch, call:
-
-```typescript
-const stream = STRATUM_BACKEND_ENABLED
-  ? streamFromBackend(nextMessages, 'intake', nextIndex, newAnswers, sessionId)
-  : mockStreamResponse(text, 'intake', newAnswers, true)
-```
-
-For escalation mode, call:
-
-```typescript
-const stream = STRATUM_BACKEND_ENABLED
-  ? streamFromBackend(nextMessages, 'escalation', intakeIndex, intakeAnswers, sessionId)
-  : mockStreamResponse(text, 'escalation', intakeAnswers, false)
-```
-
-Keep the existing mock path as the fallback when `VITE_STRATUM_API_URL` is unset.
-
+Do not reapply the old integration patch. Future frontend changes belong in the frontend repo source, followed by `npm run type-check`, `npm run lint`, `npm run build`, `npx wrangler pages functions build`, focused Playwright coverage, hosted `CI / build-and-test`, and live manifest or rendered QA as appropriate.

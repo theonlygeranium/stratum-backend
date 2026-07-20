@@ -2,7 +2,8 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-FRONTEND_ROOT="${FRONTEND_ROOT:-/workspace/edstratum-v2}"
+HUB_ROOT="$(cd "${ROOT}/.." && pwd)"
+FRONTEND_ROOT="${FRONTEND_ROOT:-${HUB_ROOT}/edstratum-v2-frontend}"
 PAGES_PROJECT="${CLOUDFLARE_PAGES_PROJECT:-edstratumlabs}"
 EXIT_CODE=0
 
@@ -88,13 +89,27 @@ else
   blocked "No deploy-ready Railway/Fly path is available. New Railway project creation needs railway plus RAILWAY_API_TOKEN or interactive login; existing project deploys can use RAILWAY_TOKEN."
 fi
 
-for required in OPENAI_API_KEY DATABASE_URL ALLOWED_ORIGINS RESEND_API_KEY JEFFREY_EMAIL; do
+for required in WRITER_API_KEY DATABASE_URL ALLOWED_ORIGINS RESEND_API_KEY ESCALATION_EMAIL_TO; do
   if has_env "${required}"; then
     ok "Required backend variable ${required} is present in the shell."
   else
     blocked "Required backend variable ${required} is missing from the shell."
   fi
 done
+
+if [[ "${EMBEDDING_PROVIDER:-hash}" == "openai" ]] && ! has_env OPENAI_API_KEY; then
+  blocked "EMBEDDING_PROVIDER=openai requires OPENAI_API_KEY."
+elif [[ "${EMBEDDING_PROVIDER:-hash}" == "openai" ]]; then
+  ok "Managed OpenAI embedding path has OPENAI_API_KEY present."
+fi
+
+if [[ "${VECTOR_STORE_PROVIDER:-chroma}" == "pinecone" ]]; then
+  if has_env PINECONE_API_KEY && has_env PINECONE_INDEX; then
+    ok "Managed Pinecone vector path has PINECONE_API_KEY and PINECONE_INDEX present."
+  else
+    blocked "VECTOR_STORE_PROVIDER=pinecone requires PINECONE_API_KEY and PINECONE_INDEX."
+  fi
+fi
 
 echo
 if [[ -d "${FRONTEND_ROOT}" ]]; then
@@ -106,7 +121,7 @@ fi
 dist="${FRONTEND_DIST:-${FRONTEND_ROOT}/dist}"
 if [[ -d "${dist}" ]]; then
   ok "Frontend dist directory exists at ${dist}."
-  for path in index.html robots.txt sitemap.xml og-image.png _headers _redirects; do
+  for path in index.html build-manifest.json robots.txt sitemap.xml og-image.png _headers _redirects; do
     [[ -f "${dist}/${path}" ]] && ok "dist/${path} present." || blocked "dist/${path} is missing."
   done
 else
