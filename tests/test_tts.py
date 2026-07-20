@@ -42,25 +42,34 @@ def test_tts_proxies_text_to_elevenlabs(monkeypatch) -> None:
 
     class FakeResponse:
         status_code = 200
-        content = b"mp3-bytes"
         headers = {"content-type": "audio/mpeg"}
+
+        async def aiter_bytes(self):
+            yield b"mp3-"
+            yield b"bytes"
+
+        async def aclose(self) -> None:
+            captured["response_closed"] = True
 
     class FakeClient:
         def __init__(self, timeout: float):
-            self.timeout = timeout
+            captured["timeout"] = timeout
 
-        async def __aenter__(self):
-            return self
-
-        async def __aexit__(self, exc_type, exc, tb) -> None:
-            return None
-
-        async def post(self, url: str, *, params: dict, headers: dict, json: dict):
+        def build_request(self, method: str, url: str, *, params: dict, headers: dict, json: dict):
+            captured["method"] = method
             captured["url"] = url
             captured["params"] = params
             captured["headers"] = headers
             captured["json"] = json
+            return {"method": method, "url": url}
+
+        async def send(self, request: dict, *, stream: bool):
+            captured["request"] = request
+            captured["stream"] = stream
             return FakeResponse()
+
+        async def aclose(self) -> None:
+            captured["client_closed"] = True
 
     monkeypatch.setattr("app.tts.httpx.AsyncClient", FakeClient)
     object.__setattr__(main_module.settings, "elevenlabs_api_key", "test-key")
@@ -74,14 +83,18 @@ def test_tts_proxies_text_to_elevenlabs(monkeypatch) -> None:
     assert response.status_code == 200
     assert response.headers["content-type"] == "audio/mpeg"
     assert response.content == b"mp3-bytes"
+    assert captured["method"] == "POST"
     assert captured["url"].endswith("/v1/text-to-speech/voice-override")
     assert captured["params"] == {"output_format": "mp3_44100_128"}
+    assert captured["stream"] is True
     assert captured["headers"]["xi-api-key"] == "test-key"
     assert captured["headers"]["Accept"] == "audio/mpeg"
     assert captured["json"] == {
         "text": "Hello from STRATUM.",
         "model_id": "eleven_multilingual_v2",
     }
+    assert captured["response_closed"] is True
+    assert captured["client_closed"] is True
 
 
 def test_tts_rate_limit_is_per_session(monkeypatch) -> None:
@@ -89,23 +102,28 @@ def test_tts_rate_limit_is_per_session(monkeypatch) -> None:
 
     class FakeResponse:
         status_code = 200
-        content = b"mp3-bytes"
         headers = {"content-type": "audio/mpeg"}
+
+        async def aiter_bytes(self):
+            yield b"mp3-bytes"
+
+        async def aclose(self) -> None:
+            return None
 
     class FakeClient:
         def __init__(self, timeout: float):
             self.timeout = timeout
 
-        async def __aenter__(self):
-            return self
+        def build_request(self, *args, **kwargs):
+            return {"args": args, "kwargs": kwargs}
 
-        async def __aexit__(self, exc_type, exc, tb) -> None:
-            return None
-
-        async def post(self, *args, **kwargs):
+        async def send(self, *args, **kwargs):
             nonlocal calls
             calls += 1
             return FakeResponse()
+
+        async def aclose(self) -> None:
+            return None
 
     monkeypatch.setattr("app.tts.httpx.AsyncClient", FakeClient)
     object.__setattr__(main_module.settings, "elevenlabs_api_key", "test-key")

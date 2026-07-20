@@ -5,7 +5,7 @@ from datetime import UTC, datetime
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse, Response, StreamingResponse
+from fastapi.responses import JSONResponse, StreamingResponse
 
 from app.agent import StratumAgent
 from app.config import get_settings
@@ -155,14 +155,14 @@ def _tts_session_key(request: Request) -> str:
 
 @app.post("/api/tts")
 @app.post("/tts")
-async def tts(request: TTSRequest, http_request: Request) -> Response:
-    audio, content_type = await synthesize_speech(
+async def tts(request: TTSRequest, http_request: Request) -> StreamingResponse:
+    audio_stream, content_type = await synthesize_speech(
         settings,
         request,
         session_key=_tts_session_key(http_request),
     )
-    return Response(
-        content=audio,
+    return StreamingResponse(
+        audio_stream,
         media_type=content_type,
         headers={"Cache-Control": "no-store"},
     )

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import AsyncIterator
 from collections import defaultdict, deque
 from time import monotonic
 from urllib.parse import quote
@@ -36,7 +37,7 @@ async def synthesize_speech(
     request: TTSRequest,
     *,
     session_key: str,
-) -> tuple[bytes, str]:
+) -> tuple[AsyncIterator[bytes], str]:
     if not settings.elevenlabs_api_key:
         raise HTTPException(status_code=503, detail="tts_not_configured")
 
@@ -47,22 +48,40 @@ async def synthesize_speech(
         raise HTTPException(status_code=503, detail="tts_voice_not_configured")
 
     url = ELEVENLABS_TTS_URL.format(voice_id=quote(voice_id, safe=""))
-    async with httpx.AsyncClient(timeout=30.0) as client:
-        response = await client.post(
-            url,
-            params={"output_format": "mp3_44100_128"},
-            headers={
-                "Accept": "audio/mpeg",
-                "Content-Type": "application/json",
-                "xi-api-key": settings.elevenlabs_api_key,
-            },
-            json={
-                "text": request.text,
-                "model_id": ELEVENLABS_MODEL_ID,
-            },
-        )
+    client = httpx.AsyncClient(timeout=30.0)
+    upstream_request = client.build_request(
+        "POST",
+        url,
+        params={"output_format": "mp3_44100_128"},
+        headers={
+            "Accept": "audio/mpeg",
+            "Content-Type": "application/json",
+            "xi-api-key": settings.elevenlabs_api_key,
+        },
+        json={
+            "text": request.text,
+            "model_id": ELEVENLABS_MODEL_ID,
+        },
+    )
+
+    try:
+        response = await client.send(upstream_request, stream=True)
+    except httpx.HTTPError as exc:
+        await client.aclose()
+        raise HTTPException(status_code=502, detail="tts_provider_error") from exc
 
     if response.status_code >= 400:
+        await response.aclose()
+        await client.aclose()
         raise HTTPException(status_code=502, detail="tts_provider_error")
 
-    return response.content, response.headers.get("content-type", "audio/mpeg")
+    async def audio_chunks() -> AsyncIterator[bytes]:
+        try:
+            async for chunk in response.aiter_bytes():
+                if chunk:
+                    yield chunk
+        finally:
+            await response.aclose()
+            await client.aclose()
+
+    return audio_chunks(), response.headers.get("content-type", "audio/mpeg")
