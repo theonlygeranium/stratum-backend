@@ -102,6 +102,16 @@ Run the deployed Phase 4 conversation matrix:
 .venv/bin/python scripts/eval_deployed_conversations.py --json
 ```
 
+Run the safe deployed backend smoke:
+
+```bash
+.venv/bin/python scripts/live_backend_smoke.py
+```
+
+The smoke checks public `/api/health`, production CORS, `/api/runtime`, one
+grounded RAG SSE stream, and one `X-Stratum-Eval: true` suppressed escalation
+SSE stream. It does not send live handoff email.
+
 Current local targets:
 
 - Retrieval Recall@10: `>= 0.90`.
