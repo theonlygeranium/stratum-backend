@@ -11,6 +11,8 @@ Checked on 2026-07-20 UTC after frontend live-smoke command deployment and produ
 - Latest backend code-bearing commit verified for managed RAG plumbing:
   `41b2ae9`
 - Latest backend workflow/action-migration commit verified: `f7dced4`
+- Latest backend source/tooling commit verified locally, deployed on Railway,
+  and live-smoked: `5793eee`
 - Docs-only commits can advance Railway deployment metadata without changing
   backend runtime behavior. Verify the current deployment through GitHub commit
   status, Railway deployment status, and public `/api/health` plus `/api/runtime`.
@@ -70,6 +72,13 @@ Current public runtime evidence:
 - Frontend hosted CI status context: `CI / build-and-test`
 - Backend CI runs `pytest -q`, `scripts/eval_rag.py --json` with Bash
   `pipefail`, and uploads `rag-eval-report.json` every run.
+- Backend commit `5793eee` adds `scripts/live_backend_smoke.py` for safe
+  deployed API/RAG/runtime smoke: public health, production CORS, runtime
+  providers, grounded RAG SSE with citations, and an `X-Stratum-Eval`
+  suppressed escalation SSE contract check. Local pytest (`129 passed,
+  1 skipped`), RAG eval, pre-deploy live backend smoke, Railway deployment
+  success, post-deploy live backend smoke, and frontend same-origin live smoke
+  all passed.
 - Frontend CI runs type-check, lint, production build, dist manifest assertion,
   pinned Cloudflare Pages Functions build, forbidden-copy scan, and Playwright.
   Latest verified frontend workflow run before the billing blocker was
@@ -115,8 +124,9 @@ Current public runtime evidence:
   account/repo controls previously returned a GitHub plan/permission blocker.
 - GitHub Actions currently has an account billing/spending-limit blocker for the
   frontend repo; hosted CI for `bb8f3b4` and later pushes cannot be trusted
-  until the workflow can start and pass. A backend rerun reproduced the same
-  billing/spending-limit annotation.
+  until the workflow can start and pass. Backend run `29743747239` for
+  `5793eee` reproduced the same billing/spending-limit annotation before any
+  workflow steps started.
 - Cloudflare KV `STRATUM_CONFIG` and `RATE_LIMIT` bindings are not active in
   production.
 - Cloudflare D1 persistence is not active until `STRATUM_DB`, `SESSION_SECRET`,
