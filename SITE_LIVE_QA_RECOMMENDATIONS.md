@@ -16,11 +16,11 @@ Earlier notes that the frontend source was missing are now superseded. The sourc
 - Site: `https://edstratumlabs.ai`
 - Cloudflare Pages project: `edstratumlabs`
 - Cloudflare source: GitHub repo `theonlygeranium/edstratum-v2-frontend`
-- Latest source commit observed in Pages production metadata: `ec95e8b`
-- Current production entry asset: `/assets/index-BmMnKl08.js`
-- Current STRATUM chat asset: `/assets/StratumChat-DcniEbxZ.js`
+- Latest frontend production code commit verified by live bundle: `371f634`
+- Current production entry asset: `/assets/index-Bg_rGm5t.js`
+- Current STRATUM chat asset: `/assets/StratumChat-CXnpkHWz.js`
 - Backend: `https://stratum-backend-production-a340.up.railway.app`
-- Latest backend main commit verified by public health/SSE behavior: `cde0dbe`
+- Latest backend main commit verified by public health/SSE behavior: `ad1593b`
 - Backend runtime previously verified: Writer/Palmyra generation, hash embeddings, Railway Postgres-backed graph/session state
 
 ## QA Summary
@@ -36,6 +36,10 @@ Earlier notes that the frontend source was missing are now superseded. The sourc
   - Public `/api/health` returns `rag: { status: "ok", vectorStoreConnected: true }`.
   - Live `/api/chat` SSE smoke with `X-Stratum-Eval: true` returned HTTP 200, SSE content type, terminal `done`, and citation rows.
   - Live `https://edstratumlabs.ai` rendered and expanded citation excerpts from the production backend.
+- Escalation email safety enhancement deployed:
+  - Public `/api/escalate` with `X-Stratum-QA: true` returned `{ success: true, status: "suppressed", messageId: "qa-suppressed" }`.
+  - Public `/api/chat` with `X-Stratum-Eval: true` returned terminal `done.escalation.status: "suppressed"` for an explicit escalation prompt.
+  - Live frontend rendered success/failure confirmations using intercepted SSE only, so no live handoff email was sent.
 
 ## Notes For Future Agents
 
@@ -46,24 +50,24 @@ Earlier notes that the frontend source was missing are now superseded. The sourc
 - Production CORS allows the production domain; localhost requests to Railway are expected to fail unless backend CORS is expanded for a local backend or staging origin.
 - Cloudflare Pages is connected to the frontend GitHub repo.
 - Pushing frontend `main` automatically deploys production; pushing frontend feature branches creates preview deployments.
-- Production Cloudflare env includes `VITE_STRATUM_API_URL`. Preview env vars were last verified as unset, so branch previews may use mock chat unless the backend URL is added to preview settings.
+- Production frontend currently reaches Railway through the source fallback if `VITE_STRATUM_API_URL` is missing at build time. Preview env vars were last verified as unset, so branch previews may use mock chat unless the backend URL is added to preview settings.
+- Frontend commit `371f634` also includes a production-host fallback to the public Railway backend if Cloudflare Pages production builds without `VITE_STRATUM_API_URL`; localhost and branch previews remain mock-mode by default.
 
 ## Completed Feature 1
 
 - Enhancement spec Feature 1 citation delta is deployed on the Python/FastAPI backend: `RagCitation`, `citations` SSE events before terminal `done`, citation extraction from retrieved KB chunks, graph checkpoint preservation, and RAG health in `/api/health`.
 - Local and production QA passed on 2026-07-20. Railway CLI auth was unavailable in the shell, so public health/runtime/SSE endpoints were used as deployment evidence.
 
-## Feature 2 Branch Status
+## Completed Feature 2
 
-- Branch `feat/escalation-email` adds structured escalation delivery metadata, branded Resend HTML plus plaintext payloads, safe `/api/escalate`, session-scoped rate limiting, env aliases `ESCALATION_EMAIL_TO` / `ESCALATION_EMAIL_FROM`, and QA suppression for `X-Stratum-QA` and `X-Stratum-Eval`.
-- Local branch QA passed on 2026-07-20: `./.venv/bin/pytest -q` (`116 passed, 1 skipped`).
-- Pending post-merge checks: public `/api/escalate` with `X-Stratum-QA: true`, public `/api/chat` escalation path with `X-Stratum-Eval: true`, and live frontend confirmation UI through a suppressed or mock path only.
+- Enhancement spec Feature 2 is deployed on the Python/FastAPI backend: structured `EscalationDelivery`, delivery metadata on terminal `done` SSE events, branded Resend HTML plus plaintext payloads, safe `/api/escalate`, session-scoped rate limiting, env aliases `ESCALATION_EMAIL_TO` / `ESCALATION_EMAIL_FROM`, and QA suppression for `X-Stratum-QA` and `X-Stratum-Eval`.
+- Local and production QA passed on 2026-07-20. Railway CLI auth was unavailable in the shell, so public health/runtime/SSE endpoints were used as deployment evidence.
 
 ## Recommended Next Steps
 
 1. Add/verify Cloudflare preview env var `VITE_STRATUM_API_URL` if preview branches should exercise the live backend instead of mock chat.
 2. Keep frontend Playwright tests for homepage render, chatbot open, prompt submit, mobile layout, and discretion-safe copy.
-3. Merge and deploy Feature 2, then verify the suppression path before any live escalation QA that could otherwise send email.
+3. Keep using `X-Stratum-QA` or `X-Stratum-Eval` for any future live escalation QA unless the user explicitly requests an email test.
 4. Add CI for `npm ci`, `npm run build`, and forbidden-copy scans.
 5. Add a small public build manifest with git SHA, build timestamp, backend URL, and asset hashes for easier live verification.
 6. Prefer scoped Cloudflare deploy tokens over global credentials, and keep deploy credentials out of checked-in files.
