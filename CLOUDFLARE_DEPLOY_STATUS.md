@@ -11,7 +11,7 @@ Checked on 2026-07-20 UTC after frontend asset fallback hardening, backend relea
 - Latest backend code-bearing commit verified for managed RAG plumbing:
   `41b2ae9`
 - Latest backend workflow/action-migration commit verified: `f7dced4`
-- Latest backend source/tooling commit verified locally, deployed on Railway,
+- Latest backend runtime/tooling commit verified locally, deployed on Railway,
   and live-smoked: `ac6a69a`
 - Docs-only commits can advance Railway deployment metadata without changing
   backend runtime behavior. Verify the current deployment through GitHub commit
@@ -42,7 +42,7 @@ Current public runtime evidence:
 - Production aliases: `https://edstratumlabs.ai`,
   `https://www.edstratumlabs.ai`
 - Frontend GitHub repository: `theonlygeranium/edstratum-v2-frontend`
-- Latest frontend production source/tooling commit verified locally and live:
+- Latest frontend production app code/tooling commit verified locally and live:
   `b51a623`
 - Latest verified app code-bearing asset commit: `b51a623`; it refreshes the
   entry/chat/service bundle hashes after the Pages fallback fix and confirms

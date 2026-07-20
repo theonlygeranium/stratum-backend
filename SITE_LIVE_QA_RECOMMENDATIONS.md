@@ -16,7 +16,7 @@ Earlier notes that the frontend source was missing are now superseded. The sourc
 - Site: `https://edstratumlabs.ai`
 - Cloudflare Pages project: `edstratumlabs`
 - Cloudflare source: GitHub repo `theonlygeranium/edstratum-v2-frontend`
-- Latest frontend production source/tooling commit verified locally and live: `b51a623`
+- Latest frontend production app code/tooling commit verified locally and live: `b51a623`
 - Latest verified app code-bearing asset commit: `b51a623`; it refreshes entry/chat/service hashes after the Cloudflare Pages fallback fix and confirms the seven-question STRATUM intake runtime contract.
 - Frontend GitHub Actions action-migration commit verified: `d01ce68`; frontend CI app-runtime migration commit verified: `f2c969b`; CI Playwright server-ownership fix commit `84e01ce` is already contained in current `main`; Wrangler pin commit `76b97ba`, live-smoke command commit `bb8f3b4`, rendered live-smoke command commit `52cdf47`, asset-smoke hardening commit `7eb42dd`, Pages fallback fix commit `b341b07`, and asset hash refresh commit `b51a623` are deployed, but hosted CI proof is pending because GitHub Actions run `29748630950` for commit `b51a623` failed before starting any steps due to an account billing/spending-limit blocker.
 - Current production entry asset: `/assets/index-DjtEbwVx.js`
@@ -26,9 +26,9 @@ Earlier notes that the frontend source was missing are now superseded. The sourc
 - Current PDF snapshot assets: `/assets/stratumPDF-Bgc_chGe.js`, `/assets/pdf-vendor-B7fMFYQc.js`
 - Current public build manifest: `https://edstratumlabs.ai/build-manifest.json`
 - Backend: `https://stratum-backend-production-a340.up.railway.app`
-- Latest backend code/helper commit pushed: `ac6a69a`
+- Latest backend runtime/tooling commit verified: `ac6a69a`
 - Latest backend workflow/action-migration commit with hosted CI proof: `f7dced4`
-- Latest backend source/tooling commit verified locally, deployed on Railway, and live-smoked: `ac6a69a`
+- Latest backend runtime/tooling commit verified locally, deployed on Railway, and live-smoked: `ac6a69a`
 - Public backend health/runtime routes remain healthy after the source pushes; GitHub status for `ac6a69a` reports Railway deployment success. Hosted backend CI for `ac6a69a` did not start any steps because of the GitHub account billing/spending-limit blocker.
 - Backend runtime previously verified: Writer/Palmyra generation, hash embeddings, Railway Postgres-backed graph/session state
 
