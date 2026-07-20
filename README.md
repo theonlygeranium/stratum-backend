@@ -112,6 +112,18 @@ The smoke checks public `/api/health`, production CORS, `/api/runtime`, one
 grounded RAG SSE stream, and one `X-Stratum-Eval: true` suppressed escalation
 SSE stream. It does not send live handoff email.
 
+Run the non-mutating release/governance audit:
+
+```bash
+.venv/bin/python scripts/live_release_audit.py
+```
+
+The release audit checks GitHub `main` branch protection, required status/check
+state, Cloudflare Pages deployment state, the live frontend manifest and runtime
+flags, Railway deployment status, and backend health/runtime. It reports only
+safe metadata and exits nonzero while governance or control-plane blockers
+remain.
+
 Current local targets:
 
 - Retrieval Recall@10: `>= 0.90`.
