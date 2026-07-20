@@ -227,6 +227,7 @@ class StratumAgent:
                 yield SourceEvent(type="source", source=source)
 
                 chunks: list[str] = [GROUNDING_PREAMBLE]
+                generated_chunks: list[str] = []
                 yield TokenEvent(type="token", token=GROUNDING_PREAMBLE)
                 async for chunk in self._stream_grounded_response(
                     query,
@@ -234,14 +235,16 @@ class StratumAgent:
                     context,
                     request,
                 ):
+                    generated_chunks.append(chunk)
                     chunks.append(chunk)
                     yield TokenEvent(type="token", token=chunk)
 
-                response = "".join(chunks)
-                if not response:
-                    response = self._context_fallback(query, source, context)
-                    async for event in self._stream_text(response):
+                if not any(chunk.strip() for chunk in generated_chunks):
+                    fallback = self._context_fallback(query, source, context)
+                    chunks.append(fallback)
+                    async for event in self._stream_text(fallback):
                         yield event
+                response = "".join(chunks)
 
                 await self.graph_runtime.checkpoint_result(
                     request,

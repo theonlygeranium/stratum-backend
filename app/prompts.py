@@ -51,7 +51,7 @@ HIGH_INTENT_ESCALATION_MESSAGE = (
 
 ESCALATION_SLA_MESSAGE = (
     "I've sent the Founding leadership team a summary of our conversation. "
-    "James from the Founding leadership team will get back to you."
+    "They typically respond within one business day."
 )
 
 ESCALATION_PREPARED_MESSAGE = (

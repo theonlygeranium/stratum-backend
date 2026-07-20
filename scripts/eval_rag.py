@@ -21,6 +21,7 @@ from app.rag.hybrid import HybridRetriever  # noqa: E402
 
 DEFAULT_GOLDEN = ROOT / "tests" / "fixtures" / "rag_golden.jsonl"
 KB_DIR = ROOT / "data" / "knowledge_base"
+MIN_SUBSTANTIVE_RESPONSE_CHARS = 80
 
 
 def load_golden(path: Path) -> list[dict[str, Any]]:
@@ -134,6 +135,8 @@ def evaluate_first_token_latency() -> dict[str, Any]:
     }
 
     started = time.perf_counter()
+    first_token_latency_ms: float | None = None
+    tokens: list[str] = []
     with client.stream("POST", "/api/chat", json=payload) as response:
         response.raise_for_status()
         for line in response.iter_lines():
@@ -141,11 +144,28 @@ def evaluate_first_token_latency() -> dict[str, Any]:
                 continue
             event = json.loads(line.removeprefix("data: "))
             if event.get("type") == "token":
-                return {
-                    "first_token_latency_ms": round((time.perf_counter() - started) * 1000, 2),
-                    "passed": (time.perf_counter() - started) < 1.5,
-                }
-    return {"first_token_latency_ms": None, "passed": False}
+                if first_token_latency_ms is None:
+                    first_token_latency_ms = round(
+                        (time.perf_counter() - started) * 1000,
+                        2,
+                    )
+                tokens.append(str(event.get("token") or ""))
+
+    response_text = " ".join("".join(tokens).split())
+    substantive_response = (
+        len(response_text) >= MIN_SUBSTANTIVE_RESPONSE_CHARS
+        and response_text != "Here is the grounded read:"
+    )
+    return {
+        "first_token_latency_ms": first_token_latency_ms,
+        "substantive_response": substantive_response,
+        "response_chars": len(response_text),
+        "passed": (
+            first_token_latency_ms is not None
+            and first_token_latency_ms < 1500
+            and substantive_response
+        ),
+    }
 
 
 def _case_hit(case: dict[str, Any], docs: list[Any]) -> bool:

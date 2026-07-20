@@ -12,8 +12,13 @@ import time
 import urllib.error
 import urllib.request
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any
 
+
+ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
 
 DEFAULT_FRONTEND_REPO = "theonlygeranium/edstratum-v2-frontend"
 DEFAULT_BACKEND_REPO = "theonlygeranium/stratum-backend"
@@ -368,6 +373,69 @@ def inspect_backend_public(audit: Audit, backend_url: str) -> None:
             audit.blocked(f"backend runtime {key}", f"got {runtime.get(key)!r}")
 
 
+def inspect_deployed_conversation_matrix(
+    audit: Audit,
+    backend_url: str,
+    *,
+    timeout: float,
+    max_cases: int | None,
+) -> dict[str, Any] | None:
+    try:
+        from scripts.eval_deployed_conversations import evaluate_deployed
+    except Exception as exc:  # noqa: BLE001
+        audit.blocked("deployed conversation matrix import", str(exc))
+        return None
+
+    try:
+        report = evaluate_deployed(
+            backend_url,
+            timeout=timeout,
+            max_cases=max_cases,
+        )
+    except Exception as exc:  # noqa: BLE001
+        audit.blocked("deployed conversation matrix", f"{type(exc).__name__}: {exc}")
+        return None
+
+    metrics = report.get("metrics") or {}
+    latency = metrics.get("first_token_latency_ms") or {}
+    detail = (
+        f"{metrics.get('scenario_count')} scenarios; "
+        f"contract={metrics.get('contract_pass_rate')}; "
+        f"expected={metrics.get('expected_behavior_pass_rate')}; "
+        f"persona={metrics.get('persona_consistency_rate')}; "
+        f"hallucination={metrics.get('no_hallucination_proxy')}; "
+        f"substance={metrics.get('answer_substance_rate')}; "
+        f"escalation={metrics.get('scripted_escalation_rate')}; "
+        f"first_token_p95_ms={latency.get('p95')}"
+    )
+    if report.get("passed") is True:
+        audit.ok("deployed conversation matrix", detail)
+    else:
+        failures = report.get("failures") or []
+        failure_names = ", ".join(str(item.get("name")) for item in failures[:5])
+        suffix = f"; first failures: {failure_names}" if failure_names else ""
+        audit.blocked("deployed conversation matrix", f"{detail}{suffix}")
+    return report
+
+
+def summarize_conversation_matrix(report: dict[str, Any] | None) -> dict[str, Any] | None:
+    if report is None:
+        return None
+    metrics = report.get("metrics") or {}
+    latency = metrics.get("first_token_latency_ms") or {}
+    return {
+        "passed": report.get("passed"),
+        "scenarioCount": metrics.get("scenario_count"),
+        "contractPassRate": metrics.get("contract_pass_rate"),
+        "expectedBehaviorPassRate": metrics.get("expected_behavior_pass_rate"),
+        "personaConsistencyRate": metrics.get("persona_consistency_rate"),
+        "noHallucinationProxy": metrics.get("no_hallucination_proxy"),
+        "answerSubstanceRate": metrics.get("answer_substance_rate"),
+        "scriptedEscalationRate": metrics.get("scripted_escalation_rate"),
+        "firstTokenP95Ms": latency.get("p95"),
+    }
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description=(
@@ -380,6 +448,22 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--frontend-url", default=DEFAULT_FRONTEND_URL)
     parser.add_argument("--backend-url", default=DEFAULT_BACKEND_URL)
     parser.add_argument("--skip-github", action="store_true", help="Only check public runtime endpoints.")
+    parser.add_argument(
+        "--include-conversation-matrix",
+        action="store_true",
+        help="Also run the safe deployed 50+ scenario Phase 4 conversation matrix.",
+    )
+    parser.add_argument(
+        "--conversation-timeout",
+        type=float,
+        default=90.0,
+        help="Per-request timeout for --include-conversation-matrix.",
+    )
+    parser.add_argument(
+        "--conversation-max-cases",
+        type=int,
+        help="Debug-only cap for the conversation matrix; capped runs cannot satisfy the 50+ case SOT gate.",
+    )
     return parser.parse_args()
 
 
@@ -415,6 +499,15 @@ def main() -> int:
     inspect_frontend_public(audit, frontend_url, frontend_sha, backend_url)
     print()
     inspect_backend_public(audit, backend_url)
+    conversation_matrix: dict[str, Any] | None = None
+    if args.include_conversation_matrix:
+        print()
+        conversation_matrix = inspect_deployed_conversation_matrix(
+            audit,
+            backend_url,
+            timeout=args.conversation_timeout,
+            max_cases=args.conversation_max_cases,
+        )
 
     print()
     print(
@@ -424,6 +517,7 @@ def main() -> int:
                 "backendUrl": backend_url,
                 "frontendMain": frontend_sha[:7] if frontend_sha else None,
                 "backendMain": backend_sha[:7] if backend_sha else None,
+                "conversationMatrix": summarize_conversation_matrix(conversation_matrix),
                 "warnings": audit.warnings,
                 "blockers": audit.blockers,
             },

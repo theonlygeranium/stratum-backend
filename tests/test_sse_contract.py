@@ -389,6 +389,81 @@ def test_agent_open_stream_uses_graph_updates_and_checkpoints_result(
     }
 
 
+def test_agent_open_graph_stream_falls_back_when_llm_stream_is_empty(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    assert main_module.agent.graph_runtime is not None
+    calls = {"checkpoint": []}
+
+    async def fake_stream_updates(request: ChatRequest, *, interrupt_after=None):
+        yield "open", {
+            "retrieved_context": ["Graph-prepared Canvas context with implementation detail."],
+            "source_confidence": {
+                "label": "Graph Prepared Source",
+                "score": 0.97,
+                "grounded": True,
+            },
+            "result": None,
+        }
+
+    async def fake_checkpoint_result(
+        request: ChatRequest,
+        result: StratumResult,
+        *,
+        as_node: str = "generate",
+    ) -> None:
+        calls["checkpoint"].append(result.response_text)
+
+    async def fake_stream_grounded_response(*args, **kwargs):
+        if False:
+            yield ""
+
+    monkeypatch.setattr(
+        main_module.agent.graph_runtime,
+        "stream_updates",
+        fake_stream_updates,
+    )
+    monkeypatch.setattr(
+        main_module.agent.graph_runtime,
+        "checkpoint_result",
+        fake_checkpoint_result,
+    )
+    monkeypatch.setattr(
+        main_module.agent,
+        "_stream_grounded_response",
+        fake_stream_grounded_response,
+    )
+    request = ChatRequest.model_validate(
+        {
+            "messages": [
+                {
+                    "role": "user",
+                    "content": "Does AI make sense for my Canvas environment?",
+                    "timestamp": 0,
+                }
+            ],
+            "mode": "open",
+            "intakeIndex": None,
+            "intakeAnswers": {},
+            "sessionId": "contract-open-graph-empty-stream",
+        }
+    )
+
+    async def collect() -> list[dict]:
+        return [
+            event.model_dump(mode="json")
+            async for event in main_module.agent.stream(request)
+        ]
+
+    events = asyncio.run(collect())
+    text = "".join(event["token"] for event in events if event["type"] == "token")
+
+    assert text.startswith("Here is the grounded read: ")
+    assert "Based on Graph Prepared Source" in text
+    assert "Graph-prepared Canvas context with implementation detail." in text
+    assert calls["checkpoint"] == [text]
+
+
 def test_chat_stream_uses_sse_headers() -> None:
     response = client.post(
         "/api/chat",
@@ -472,9 +547,8 @@ def test_confirmed_escalation_notification_copy_says_sent(
     assert "I've sent the Founding leadership team a summary" in result.response_text
     assert result.escalation is not None
     assert result.escalation.status == "sent"
-    assert "James from the Founding leadership team will get back to you" in (
-        result.response_text
-    )
+    assert "They typically respond within one business day." in result.response_text
+    assert "James from the Founding leadership team" not in result.response_text
     assert "I've prepared a summary" not in result.response_text
     assert "Jeffrey" not in result.response_text
     assert "Calendly" not in result.response_text

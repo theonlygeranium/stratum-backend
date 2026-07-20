@@ -30,6 +30,8 @@ ESCALATION_RATE_MAX = 0.25
 SNAPSHOT_DELIVERY_TARGET = 0.90
 GROUNDEDNESS_TARGET = 0.85
 ABANDONMENT_TARGET = 0.30
+MIN_OPEN_ANSWER_CHARS = 80
+MIN_OTHER_ANSWER_CHARS = 30
 
 EVENT_ADAPTER = TypeAdapter(StreamEvent)
 HUMAN_CLAIM_PATTERNS = [
@@ -182,11 +184,21 @@ def _detail_from_events(
         (event.get("source") for event in events if event.get("type") == "source"),
         None,
     )
+    citations = next(
+        (event.get("data") for event in events if event.get("type") == "citations"),
+        [],
+    )
     done_event = events[-1] if events and events[-1].get("type") == "done" else {}
     sequence_errors = _sequence_errors(event_types, scenario)
     expected_check_passed = _expected_check(scenario, done_event, event_types)
     persona_passed = _persona_check(token_text)
     hallucination_passed = _hallucination_check(scenario, token_text, source)
+    answer_substance_passed = _answer_substance_check(
+        scenario,
+        token_text,
+        source,
+        citations,
+    )
 
     return {
         "name": scenario["name"],
@@ -200,6 +212,7 @@ def _detail_from_events(
         "first_event_ms": first_event_ms,
         "first_token_ms": first_token_ms,
         "source": source,
+        "citations": citations,
         "done": bool(done_event),
         "done_escalate": done_event.get("escalate"),
         "done_snapshot": bool(done_event.get("snapshot")),
@@ -216,6 +229,7 @@ def _detail_from_events(
         "expected_check_passed": expected_check_passed,
         "persona_passed": persona_passed,
         "hallucination_passed": hallucination_passed,
+        "answer_substance_passed": answer_substance_passed,
     }
 
 
@@ -299,6 +313,33 @@ def _hallucination_check(
     return True
 
 
+def _answer_substance_check(
+    scenario: dict[str, Any],
+    text: str,
+    source: dict[str, Any] | None,
+    citations: Any,
+) -> bool:
+    stripped = " ".join(text.split())
+    if len(stripped) < MIN_OTHER_ANSWER_CHARS:
+        return False
+    if scenario.get("mode") != "open" or "escalate" in scenario:
+        return True
+    if scenario["name"] == "out-of-scope":
+        return len(stripped) >= MIN_OTHER_ANSWER_CHARS
+    if len(stripped) < MIN_OPEN_ANSWER_CHARS:
+        return False
+    if not (source and source.get("grounded") is True):
+        return False
+    if not isinstance(citations, list) or not citations:
+        return False
+    return all(
+        isinstance(citation, dict)
+        and bool(str(citation.get("source") or "").strip())
+        and bool(str(citation.get("excerpt") or "").strip())
+        for citation in citations
+    )
+
+
 def _summarize(details: list[dict[str, Any]]) -> dict[str, Any]:
     total = len(details)
     first_token_values = [
@@ -315,6 +356,9 @@ def _summarize(details: list[dict[str, Any]]) -> dict[str, Any]:
     expected_rate = _rate(detail["expected_check_passed"] for detail in details)
     persona_rate = _rate(detail["persona_passed"] for detail in details)
     hallucination_rate = _rate(detail["hallucination_passed"] for detail in details)
+    answer_substance_rate = _rate(
+        detail["answer_substance_passed"] for detail in details
+    )
     completion_rate = _rate(detail["done"] for detail in details)
     snapshot_rate = delivered_snapshots / expected_snapshot_count if expected_snapshot_count else 1.0
     escalation_rate = len(escalations) / total if total else 0.0
@@ -326,6 +370,7 @@ def _summarize(details: list[dict[str, Any]]) -> dict[str, Any]:
         "expected_behavior_pass_rate": round(expected_rate, 4),
         "persona_consistency_rate": round(persona_rate, 4),
         "no_hallucination_proxy": round(hallucination_rate, 4),
+        "answer_substance_rate": round(answer_substance_rate, 4),
         "turn_completion_rate": round(completion_rate, 4),
         "abandonment_proxy": round(1.0 - completion_rate, 4),
         "snapshot_delivery_rate": round(snapshot_rate, 4),
@@ -344,6 +389,7 @@ def _summarize(details: list[dict[str, Any]]) -> dict[str, Any]:
         and expected_rate == 1.0
         and persona_rate == 1.0
         and hallucination_rate == 1.0
+        and answer_substance_rate == 1.0
         and (1.0 - completion_rate) < ABANDONMENT_TARGET
         and snapshot_rate >= SNAPSHOT_DELIVERY_TARGET
         and ESCALATION_RATE_MIN <= escalation_rate <= ESCALATION_RATE_MAX
@@ -356,6 +402,7 @@ def _summarize(details: list[dict[str, Any]]) -> dict[str, Any]:
             "contract_pass_rate": 1.0,
             "persona_consistency_rate": 1.0,
             "no_hallucination_proxy": 1.0,
+            "answer_substance_rate": 1.0,
             "snapshot_delivery_rate": SNAPSHOT_DELIVERY_TARGET,
             "scripted_escalation_rate": [
                 ESCALATION_RATE_MIN,
@@ -372,6 +419,7 @@ def _summarize(details: list[dict[str, Any]]) -> dict[str, Any]:
                 "expected_check_passed": detail["expected_check_passed"],
                 "persona_passed": detail["persona_passed"],
                 "hallucination_passed": detail["hallucination_passed"],
+                "answer_substance_passed": detail["answer_substance_passed"],
                 "validation_errors": detail["validation_errors"],
                 "sequence_errors": detail["sequence_errors"],
                 "done_escalate": detail["done_escalate"],
@@ -383,6 +431,7 @@ def _summarize(details: list[dict[str, Any]]) -> dict[str, Any]:
                 and detail["expected_check_passed"]
                 and detail["persona_passed"]
                 and detail["hallucination_passed"]
+                and detail["answer_substance_passed"]
             )
         ],
         "details": details,

@@ -124,6 +124,16 @@ flags, Railway deployment status, and backend health/runtime. It reports only
 safe metadata and exits nonzero while governance or control-plane blockers
 remain.
 
+To include the safe deployed Phase 4 matrix from the original SOT, add:
+
+```bash
+.venv/bin/python scripts/live_release_audit.py --include-conversation-matrix
+```
+
+That opt-in gate runs the 50+ scenario SSE conversation suite with
+`X-Stratum-Eval: true`, so escalation checks are suppressed and no live handoff
+email is sent.
+
 Current local targets:
 
 - Retrieval Recall@10: `>= 0.90`.
