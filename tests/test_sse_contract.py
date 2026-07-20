@@ -322,7 +322,7 @@ def test_agent_open_stream_uses_graph_updates_and_checkpoints_result(
 
     assert calls["stream"] == [("contract-open-graph-stream", ["open"])]
     assert calls["checkpoint"] == [
-        ("contract-open-graph-stream", "graph token", "generate")
+        ("contract-open-graph-stream", "Here is the grounded read: graph token", "generate")
     ]
     assert [event["type"] for event in events[:4]] == [
         "phase",
@@ -332,7 +332,7 @@ def test_agent_open_stream_uses_graph_updates_and_checkpoints_result(
     ]
     assert events[3]["source"]["label"] == "Graph Prepared Source"
     assert "".join(event["token"] for event in events if event["type"] == "token") == (
-        "graph token"
+        "Here is the grounded read: graph token"
     )
     assert events[-1] == {"type": "done", "snapshot": None, "escalate": None}
 

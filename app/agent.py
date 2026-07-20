@@ -52,6 +52,7 @@ _SUPPRESS_NOTIFICATIONS: ContextVar[bool] = ContextVar(
     "stratum_suppress_notifications",
     default=False,
 )
+GROUNDING_PREAMBLE = "Here is the grounded read: "
 
 
 class StratumAgent:
@@ -211,7 +212,8 @@ class StratumAgent:
                 yield PhaseEvent(type="phase", phase="composing")
                 yield SourceEvent(type="source", source=source)
 
-                chunks: list[str] = []
+                chunks: list[str] = [GROUNDING_PREAMBLE]
+                yield TokenEvent(type="token", token=GROUNDING_PREAMBLE)
                 async for chunk in self._stream_grounded_response(
                     query,
                     source,
@@ -304,6 +306,7 @@ class StratumAgent:
         yield PhaseEvent(type="phase", phase="composing")
         yield SourceEvent(type="source", source=retrieval.source)
         context = "\n\n".join(doc.content for doc in retrieval.docs[:3])
+        yield TokenEvent(type="token", token=GROUNDING_PREAMBLE)
 
         streamed = False
         async for token in self._stream_grounded_response(
