@@ -100,20 +100,34 @@ class RagHealth(ContractModel):
     vectorStoreConnected: bool
 
 
+class TTSHealth(ContractModel):
+    status: Literal["ok", "unconfigured"]
+    provider: Literal["elevenlabs"] = "elevenlabs"
+
+
 class HealthResponse(ContractModel):
     status: Literal["healthy"] = "healthy"
     stratum: Literal["online"] = "online"
     backend_enabled: Literal[True] = True
     rag: RagHealth
+    tts: TTSHealth
 
 
-def healthy_response(*, rag_connected: bool) -> HealthResponse:
+def healthy_response(*, rag_connected: bool, tts_configured: bool = False) -> HealthResponse:
     return HealthResponse(
         rag=RagHealth(
             status="ok" if rag_connected else "degraded",
             vectorStoreConnected=rag_connected,
-        )
+        ),
+        tts=TTSHealth(status="ok" if tts_configured else "unconfigured"),
     )
+
+
+class TTSRequest(ContractModel):
+    model_config = ConfigDict(extra="forbid", populate_by_name=True)
+
+    text: str = Field(min_length=1, max_length=500)
+    voice_id: str | None = Field(default=None, alias="voiceId")
 
 
 class RuntimeResponse(ContractModel):

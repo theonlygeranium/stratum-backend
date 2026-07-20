@@ -32,6 +32,8 @@ def _settings() -> Settings:
         resend_api_key=None,
         jeffrey_email=None,
         resend_from_email="stratum@example.com",
+        elevenlabs_api_key=None,
+        elevenlabs_voice_id="test-voice",
     )
 
 

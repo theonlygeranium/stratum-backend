@@ -35,6 +35,7 @@ def _isolate_agent_state(tmp_path):
     object.__setattr__(main_module.agent.settings, "escalation_log_dir", tmp_path)
     object.__setattr__(main_module.agent.settings, "resend_api_key", None)
     object.__setattr__(main_module.agent.settings, "jeffrey_email", None)
+    object.__setattr__(main_module.agent.settings, "elevenlabs_api_key", None)
 
 
 client = TestClient(main_module.app)
@@ -68,6 +69,7 @@ def test_health() -> None:
         "stratum": "online",
         "backend_enabled": True,
         "rag": {"status": "ok", "vectorStoreConnected": True},
+        "tts": {"status": "unconfigured", "provider": "elevenlabs"},
     }
 
 

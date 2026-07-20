@@ -35,6 +35,8 @@ def _settings(tmp_path: Path) -> Settings:
         resend_api_key="test-resend-key",
         jeffrey_email="jeffrey@example.com",
         resend_from_email="stratum@example.com",
+        elevenlabs_api_key=None,
+        elevenlabs_voice_id="test-voice",
     )
 
 

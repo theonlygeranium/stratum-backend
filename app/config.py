@@ -33,6 +33,8 @@ class Settings:
     resend_api_key: str | None
     jeffrey_email: str | None
     resend_from_email: str
+    elevenlabs_api_key: str | None
+    elevenlabs_voice_id: str
 
 
 def get_settings() -> Settings:
@@ -116,5 +118,10 @@ def get_settings() -> Settings:
             os.getenv("ESCALATION_EMAIL_FROM")
             or os.getenv("RESEND_FROM_EMAIL")
             or "stratum@edstratumlabs.ai"
+        ),
+        elevenlabs_api_key=os.getenv("ELEVENLABS_API_KEY") or None,
+        elevenlabs_voice_id=(
+            os.getenv("ELEVENLABS_VOICE_ID")
+            or "JBFqnCBsd6RMkjVDRZzb"
         ),
     )

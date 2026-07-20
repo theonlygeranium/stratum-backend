@@ -5,7 +5,7 @@ from datetime import UTC, datetime
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import StreamingResponse
+from fastapi.responses import Response, StreamingResponse
 
 from app.agent import StratumAgent
 from app.config import get_settings
@@ -17,9 +17,11 @@ from app.models import (
     EscalationRequest,
     HealthResponse,
     RuntimeResponse,
+    TTSRequest,
     healthy_response,
 )
 from app.sse import sse_event
+from app.tts import synthesize_speech
 
 settings = get_settings()
 agent = StratumAgent(settings)
@@ -64,7 +66,10 @@ app.add_middleware(
 
 @app.get("/api/health", response_model=HealthResponse)
 async def health() -> HealthResponse:
-    return healthy_response(rag_connected=bool(agent.retriever.docs))
+    return healthy_response(
+        rag_connected=bool(agent.retriever.docs),
+        tts_configured=bool(settings.elevenlabs_api_key),
+    )
 
 
 @app.get("/api/runtime", response_model=RuntimeResponse)
@@ -130,4 +135,27 @@ async def escalate(
         settings,
         payload,
         suppress_notifications=_suppresses_notifications(http_request),
+    )
+
+
+def _tts_session_key(request: Request) -> str:
+    header_session = request.headers.get("x-stratum-session")
+    if header_session:
+        return header_session
+
+    return request.client.host if request.client else "anonymous"
+
+
+@app.post("/api/tts")
+@app.post("/tts")
+async def tts(request: TTSRequest, http_request: Request) -> Response:
+    audio, content_type = await synthesize_speech(
+        settings,
+        request,
+        session_key=_tts_session_key(http_request),
+    )
+    return Response(
+        content=audio,
+        media_type=content_type,
+        headers={"Cache-Control": "no-store"},
     )
