@@ -16,15 +16,15 @@ Earlier notes that the frontend source was missing are now superseded. The sourc
 - Site: `https://edstratumlabs.ai`
 - Cloudflare Pages project: `edstratumlabs`
 - Cloudflare source: GitHub repo `theonlygeranium/edstratum-v2-frontend`
-- Latest frontend production code-bearing commit verified: `43ce52e`
-- Current production entry asset: `/assets/index-DGGaBcY3.js`
+- Latest frontend production code-bearing commit verified: `a2a9551`
+- Latest verified code-bearing frontend manifest commit: `a2a9551`; docs-only pushes can advance the manifest git SHA while leaving code-bearing asset hashes unchanged.
+- Current production entry asset: `/assets/index-y7cgbAE2.js`
 - Current production stylesheet asset: `/assets/index-DH0EGGDC.css`
-- Current STRATUM chat asset: `/assets/StratumChat-Dr5FwyGc.js`
+- Current STRATUM chat asset: `/assets/StratumChat-YqNBO1Mg.js`
 - Current PDF snapshot assets: `/assets/stratumPDF-Bgc_chGe.js`, `/assets/pdf-vendor-B7fMFYQc.js`
 - Current public build manifest: `https://edstratumlabs.ai/build-manifest.json`
 - Backend: `https://stratum-backend-production-a340.up.railway.app`
-- Latest backend main source commit pushed: `728f217`
-- Latest backend deployment docs/helper commit pushed: `728f217`
+- Latest backend code/helper commit pushed: `728f217`
 - Public backend health/runtime routes remain healthy after the source pushes; GitHub status for `728f217` reports Railway deployment success plus `Backend CI / pytest-and-rag` success.
 - Backend runtime previously verified: Writer/Palmyra generation, hash embeddings, Railway Postgres-backed graph/session state
 
@@ -89,6 +89,10 @@ Earlier notes that the frontend source was missing are now superseded. The sourc
   - Frontend commit `43ce52e` adds a preview/staging-only `VITE_STRATUM_QA=true` build gate that sends `X-Stratum-QA: true` on real-backend chat requests, updates `deploy.sh` to emergency direct-upload only, and adds `npx wrangler pages functions build` to hosted CI.
   - Local frontend QA passed on 2026-07-20: `npm run type-check`, `npm run lint`, a QA build proving `X-Stratum-QA` is emitted only when `VITE_STRATUM_QA=true`, a normal production build, `npx wrangler pages functions build`, focused escalation/sentiment tests (`16 passed`), and the full Playwright suite (`124 passed`).
   - Hosted main CI `29735401007` passed with `124 passed`, Cloudflare Pages production succeeded, and live `/build-manifest.json` returned commit `43ce52e`, entry asset `/assets/index-DGGaBcY3.js`, chat asset `/assets/StratumChat-Dr5FwyGc.js`, 13 assets, and a matching live chat-asset SHA-256 hash. The production chat asset does not contain `X-Stratum-QA`.
+- Frontend voice and persistence readiness update:
+  - Frontend commit `a2a9551` adds D1 session deletion, admin retention purge, reset-time persisted-session deletion, `idx_sessions_last_active`, same-origin microphone policy, and same-origin `/api/tts` fail-closed behavior unless runtime `voiceEnabled` is true.
+  - Local frontend QA passed on 2026-07-20: `npm run type-check`, `npm run lint`, `npm run build`, `npx wrangler pages functions build`, focused Functions tests (`42 passed`), focused persistence tests (`12 passed`), focused voice tests (`16 passed`), and full Playwright with one worker (`138 passed`).
+  - Hosted main CI `29736780944` passed with `138 passed`, Cloudflare Pages production succeeded, and live `/build-manifest.json` returned commit `a2a9551`, entry asset `/assets/index-y7cgbAE2.js`, chat asset `/assets/StratumChat-YqNBO1Mg.js`, 13 assets, and `Cache-Control: public, max-age=60, must-revalidate`. Live root headers include `Permissions-Policy: camera=(), microphone=(self), geolocation=(), payment=()`, and live `/api/tts` returns `503` with `detail: "tts_disabled"` while `/api/config` returns `voiceEnabled: false`.
 - RAG provider path update:
   - Backend commit `41b2ae9` adds modeled Pinecone settings, OpenAI/Pinecone provider plumbing through `StratumAgent` and `HybridRetriever`, direct Pinecone upsert/query support in `DenseVectorIndex`, Chroma/memory fallback on setup or query failure, and eval harness provider configuration.
   - Local backend QA passed on 2026-07-20: focused config/vector/RAG/runtime tests (`65 passed, 1 skipped`), full pytest (`129 passed, 1 skipped`), RAG eval (`passed: true`, recall@10 `1.0`, groundedness proxy `1.0`), and `pip install --dry-run -r requirements.txt` resolved `pinecone-7.3.0`.
@@ -110,7 +114,7 @@ Earlier notes that the frontend source was missing are now superseded. The sourc
 - The chatbot frontend is under `src/stratum/` in the frontend repo.
 - The production backend URL is supplied through `VITE_STRATUM_API_URL`.
 - Omitting `VITE_STRATUM_API_URL` locally enables mock mode and avoids sending live handoff notifications.
-- Production CORS allows the production domain; localhost requests to Railway are expected to fail unless backend CORS is expanded for a local backend or staging origin.
+- Production CORS allows the production domain and `http://localhost:5173`; other local or preview origins need explicit expansion.
 - Cloudflare Pages is connected to the frontend GitHub repo.
 - Pushing frontend `main` automatically deploys production; pushing frontend feature branches creates preview deployments.
 - Production frontend currently reaches Railway through the source fallback if `VITE_STRATUM_API_URL` is missing at build time. Preview env vars were last verified as unset, so branch previews may use mock chat unless the backend URL is added to preview settings.
@@ -127,6 +131,7 @@ Earlier notes that the frontend source was missing are now superseded. The sourc
 - Frontend commit `c5f6431` adds public non-secret deployment metadata at `/build-manifest.json`.
 - Backend commit `3d6387a` adds the hosted backend CI gate hardening and keeps custom status context `Backend CI / pytest-and-rag`.
 - Frontend commit `43ce52e` adds preview/staging-only `VITE_STRATUM_QA=true` support for `X-Stratum-QA: true`; leave it unset in production.
+- Frontend commit `a2a9551` adds D1 deletion/retention purge primitives, same-origin microphone policy readiness, and same-origin `/api/tts` runtime fail-closed behavior.
 - Backend commit `728f217` keeps deploy helpers aligned with current runtime env names and makes optional managed RAG/TTS variables explicit without printing secret values.
 
 ## Current SOT Blockers
@@ -134,9 +139,7 @@ Earlier notes that the frontend source was missing are now superseded. The sourc
 - GitHub branch protection for frontend `main` is not configured to require `CI / build-and-test`; this is still a release-governance blocker. A GitHub API attempt on 2026-07-20 returned HTTP 403 requiring GitHub Pro or a public repository before branch protection can be enabled.
 - Cloudflare KV rate limiting is not active in production. Live rapid `/api/config` probes did not produce HTTP 429, and the middleware skips enforcement until `RATE_LIMIT` is bound.
 - Cloudflare D1 conversation persistence is not active. `/api/config` returns `persistenceEnabled: false`, and `/api/sessions/.../messages` returns `503 d1_not_configured`.
-- Voice/TTS is not active in production. `/api/config` returns `voiceEnabled: false`, `/api/health` reports `tts.status: "unconfigured"`, and live `/api/tts` returns `503 tts_not_configured` for a valid validation-only payload.
-- Voice input cannot be enabled safely until the frontend `public/_headers` microphone permission policy is updated; it currently sets `microphone=()`.
-- D1 persistence activation still needs a retention/deletion plan before customer conversation storage is turned on.
+- Voice/TTS is not active in production. `/api/config` returns `voiceEnabled: false`, `/api/health` reports `tts.status: "unconfigured"`, and live same-origin `/api/tts` fails closed with `503 tts_disabled` while runtime voice is disabled.
 - Backend runtime reports `embedding_provider: "hash"` and `vector_store_provider: "chroma"`; the OpenAI/Pinecone path is now source-ready and locally tested, but production still needs Railway env activation before the managed provider path is live.
 - Hosted frontend and backend CI currently emit GitHub annotations that some pinned GitHub Actions target deprecated Node.js 20 and are being forced to Node.js 24. Runs pass, but this should be monitored before the forced compatibility path changes.
 - Wrangler and Railway CLI are unauthenticated in this shell, and no safe control-plane tokens are present, so Cloudflare bindings, Railway env vars, and exact deployment SHAs cannot be changed or verified from here.
@@ -191,8 +194,8 @@ Earlier notes that the frontend source was missing are now superseded. The sourc
 2. Keep frontend Playwright tests for homepage render, chatbot open, prompt submit, mobile layout, and discretion-safe copy.
 3. Keep using `X-Stratum-QA` or `X-Stratum-Eval` for any future live escalation QA unless the user explicitly requests an email test.
 4. Create and bind Cloudflare KV namespaces `STRATUM_CONFIG` and `RATE_LIMIT` once credentials are available.
-5. Create D1 database `stratum-conversations`, run `schema.sql`, bind it as `STRATUM_DB`, add `SESSION_SECRET`, document retention/deletion expectations, then set KV runtime `persistenceEnabled: true` only after a live smoke plan is ready.
-6. Configure voice/TTS only after a safe rollout plan: update the microphone `Permissions-Policy`, set Railway `ELEVENLABS_API_KEY`, optional `ELEVENLABS_VOICE_ID`, Cloudflare Pages `VITE_TTS_ENABLED=true`, then KV runtime `voiceEnabled: true`.
+5. Create D1 database `stratum-conversations`, run `schema.sql`, bind it as `STRATUM_DB`, add `SESSION_SECRET`, choose an operational purge cadence using `/api/sessions/purge`, then set KV runtime `persistenceEnabled: true` only after a live smoke plan is ready.
+6. Configure voice/TTS only after a safe rollout plan: set Railway `ELEVENLABS_API_KEY`, optional `ELEVENLABS_VOICE_ID`, Cloudflare Pages `VITE_TTS_ENABLED=true`, then KV runtime `voiceEnabled: true`.
 7. Activate managed RAG providers only after staging smoke: set Railway `EMBEDDING_PROVIDER=openai`, `VECTOR_STORE_PROVIDER=pinecone`, `PINECONE_API_KEY`, `PINECONE_INDEX`, optional `PINECONE_NAMESPACE`, then verify `/api/runtime` reports `openai`/`pinecone` and RAG eval remains above threshold.
 8. Add branch protection for backend `main` requiring `Backend CI / pytest-and-rag`, and keep frontend `CI / build-and-test` required once GitHub plan controls allow it.
 9. Use `/build-manifest.json` as the first frontend deploy verification check before deeper rendered QA.
