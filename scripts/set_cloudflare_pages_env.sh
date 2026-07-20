@@ -4,7 +4,9 @@ set -euo pipefail
 : "${STRATUM_BACKEND_URL:?Set STRATUM_BACKEND_URL, for example https://stratum.edstratumlabs.ai}"
 
 PROJECT="${CLOUDFLARE_PAGES_PROJECT:-edstratumlabs}"
-FRONTEND_ROOT="${FRONTEND_ROOT:-/workspace/edstratum-v2}"
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+HUB_ROOT="$(cd "${ROOT}/.." && pwd)"
+FRONTEND_ROOT="${FRONTEND_ROOT:-${HUB_ROOT}/edstratum-v2-frontend}"
 
 fail() {
   echo "ERROR: $*" >&2
@@ -28,7 +30,7 @@ fi
 
 if [[ ! -d "${FRONTEND_ROOT}" ]]; then
   echo "Note: frontend source is not present at ${FRONTEND_ROOT}."
-  echo "This script can only set the Pages build-time env var; a frontend redeploy must be run from a workspace that has the React/Vite source or verified dist artifact."
+  echo "This script can only set the Pages build-time env var; a frontend redeploy must be run from the React/Vite source workspace."
 fi
 
 if [[ "${DRY_RUN:-0}" == "1" || "${DRY_RUN:-}" == "true" ]]; then

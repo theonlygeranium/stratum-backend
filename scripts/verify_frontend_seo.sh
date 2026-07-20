@@ -2,7 +2,9 @@
 set -euo pipefail
 
 url="${1:-https://edstratumlabs.ai}"
-frontend_root="${FRONTEND_ROOT:-/workspace/edstratum-v2}"
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+HUB_ROOT="$(cd "${ROOT}/.." && pwd)"
+frontend_root="${FRONTEND_ROOT:-${HUB_ROOT}/edstratum-v2-frontend}"
 dist="${FRONTEND_DIST:-${frontend_root}/dist}"
 exit_code=0
 
@@ -40,7 +42,7 @@ done
 if [[ -d "${dist}" ]]; then
   echo
   echo "Checking local pre-deploy artifact at ${dist}"
-  for path in index.html robots.txt sitemap.xml og-image.png _headers _redirects; do
+  for path in index.html build-manifest.json robots.txt sitemap.xml og-image.png _headers _redirects; do
     [[ -f "${dist}/${path}" ]] && check "dist/${path} is present." || fail "dist/${path} is missing."
   done
 else

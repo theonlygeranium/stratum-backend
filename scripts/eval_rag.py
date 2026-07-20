@@ -107,7 +107,12 @@ def evaluate_retrieval(cases: list[dict[str, Any]]) -> dict[str, Any]:
 def evaluate_first_token_latency() -> dict[str, Any]:
     os.environ.pop("OPENAI_API_KEY", None)
     os.environ.pop("LLM_API_KEY", None)
+    os.environ.pop("WRITER_API_KEY", None)
+    os.environ.pop("COHERE_API_KEY", None)
     os.environ["EMBEDDING_PROVIDER"] = "hash"
+    os.environ["VECTOR_STORE_PROVIDER"] = "chroma"
+    os.environ["RERANKER_PROVIDER"] = "heuristic"
+    os.environ["LLM_PROVIDER"] = "writer"
 
     from fastapi.testclient import TestClient
 

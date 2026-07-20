@@ -19,7 +19,29 @@ export ALLOWED_ORIGINS="${ALLOWED_ORIGINS:-https://edstratumlabs.ai,https://www.
 export ESCALATION_EMAIL_TO="${ESCALATION_EMAIL_TO:-${JEFFREY_EMAIL:-}}"
 export ESCALATION_EMAIL_FROM="${ESCALATION_EMAIL_FROM:-${RESEND_FROM_EMAIL:-}}"
 
-required_env=(OPENAI_API_KEY DATABASE_URL ALLOWED_ORIGINS RESEND_API_KEY ESCALATION_EMAIL_TO)
+required_env=(WRITER_API_KEY DATABASE_URL ALLOWED_ORIGINS RESEND_API_KEY ESCALATION_EMAIL_TO)
+optional_env=(
+  ESCALATION_EMAIL_FROM
+  CONFIDENCE_THRESHOLD
+  CALENDLY_URL
+  OPENAI_API_KEY
+  EMBEDDING_PROVIDER
+  EMBEDDING_MODEL
+  VECTOR_STORE_PROVIDER
+  CHROMA_PERSIST_DIR
+  PINECONE_API_KEY
+  PINECONE_INDEX
+  PINECONE_NAMESPACE
+  COHERE_API_KEY
+  RERANKER_PROVIDER
+  RERANKER_MODEL
+  LLM_PROVIDER
+  LLM_BASE_URL
+  LLM_MODEL
+  LLM_API_KEY
+  ELEVENLABS_API_KEY
+  ELEVENLABS_VOICE_ID
+)
 
 fail() {
   printf '[BLOCKED] %s\n' "$*" >&2
@@ -41,6 +63,20 @@ for key in "${required_env[@]}"; do
 done
 if [[ "${#missing[@]}" -gt 0 ]]; then
   fail "Missing required backend env vars: ${missing[*]}. Do not use placeholder secret values."
+fi
+
+if [[ "${EMBEDDING_PROVIDER:-hash}" == "openai" && -z "${OPENAI_API_KEY:-}" ]]; then
+  fail "EMBEDDING_PROVIDER=openai requires OPENAI_API_KEY."
+fi
+
+if [[ "${VECTOR_STORE_PROVIDER:-chroma}" == "pinecone" ]]; then
+  if [[ -z "${PINECONE_API_KEY:-}" || -z "${PINECONE_INDEX:-}" ]]; then
+    fail "VECTOR_STORE_PROVIDER=pinecone requires PINECONE_API_KEY and PINECONE_INDEX."
+  fi
+fi
+
+if [[ "${LLM_PROVIDER:-writer}" == "openai" && -z "${LLM_API_KEY:-${OPENAI_API_KEY:-}}" ]]; then
+  fail "LLM_PROVIDER=openai requires LLM_API_KEY or OPENAI_API_KEY."
 fi
 
 if [[ -n "${RAILWAY_API_TOKEN:-}" && -n "${RAILWAY_TOKEN:-}" ]]; then
@@ -82,6 +118,13 @@ fi
 for key in "${required_env[@]}"; do
   printf '%s' "${!key}" | railway variable set "${key}" --stdin --service "${SERVICE_NAME}" --environment "${ENVIRONMENT}" --skip-deploys --json >/dev/null
   ok "Set ${key} on Railway service ${SERVICE_NAME}."
+done
+
+for key in "${optional_env[@]}"; do
+  if [[ -n "${!key:-}" ]]; then
+    printf '%s' "${!key}" | railway variable set "${key}" --stdin --service "${SERVICE_NAME}" --environment "${ENVIRONMENT}" --skip-deploys --json >/dev/null
+    ok "Set optional ${key} on Railway service ${SERVICE_NAME}."
+  fi
 done
 
 railway service redeploy --service "${SERVICE_NAME}" --environment "${ENVIRONMENT}" --from-source --yes --json >/dev/null
