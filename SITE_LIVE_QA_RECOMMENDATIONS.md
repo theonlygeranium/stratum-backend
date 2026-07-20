@@ -15,7 +15,8 @@ Earlier notes that the frontend source was missing are now superseded. The sourc
 
 - Site: `https://edstratumlabs.ai`
 - Cloudflare Pages project: `edstratumlabs`
-- Latest source commit deployed through Pages metadata: `366e4c8`
+- Cloudflare source: GitHub repo `theonlygeranium/edstratum-v2-frontend`
+- Latest source commit observed in Pages production metadata: `f6cc8b4`
 - Current production entry asset: `/assets/index-BChwigZm.js`
 - Current STRATUM chat asset: `/assets/StratumChat-Cl3e2M0J.js`
 - Backend: `https://stratum-backend-production-a340.up.railway.app`
@@ -38,12 +39,14 @@ Earlier notes that the frontend source was missing are now superseded. The sourc
 - The production backend URL is supplied through `VITE_STRATUM_API_URL`.
 - Omitting `VITE_STRATUM_API_URL` locally enables mock mode and avoids sending live handoff notifications.
 - Production CORS allows the production domain; localhost requests to Railway are expected to fail unless backend CORS is expanded for a local backend or staging origin.
-- Cloudflare Pages is still deployed by direct Wrangler upload. Connecting the private GitHub repo to Cloudflare Pages remains recommended.
+- Cloudflare Pages is connected to the frontend GitHub repo.
+- Pushing frontend `main` automatically deploys production; pushing frontend feature branches creates preview deployments.
+- Production Cloudflare env includes `VITE_STRATUM_API_URL`. Preview env vars were last verified as unset, so branch previews may use mock chat unless the backend URL is added to preview settings.
 
 ## Recommended Next Steps
 
-1. Connect Cloudflare Pages to the private GitHub frontend repo so `main` can deploy automatically from source.
-2. Add frontend Playwright tests for homepage render, chatbot open, prompt submit, mobile layout, and discretion-safe copy.
+1. Add/verify Cloudflare preview env var `VITE_STRATUM_API_URL` if preview branches should exercise the live backend instead of mock chat.
+2. Keep frontend Playwright tests for homepage render, chatbot open, prompt submit, mobile layout, and discretion-safe copy.
 3. Add a staging or eval-only backend path for escalation QA that cannot send live notifications.
 4. Add CI for `npm ci`, `npm run build`, and forbidden-copy scans.
 5. Add a small public build manifest with git SHA, build timestamp, backend URL, and asset hashes for easier live verification.
