@@ -43,6 +43,38 @@ DEFAULT_BACKEND_RUNTIME = {
     "llm_provider": "writer",
 }
 DEFAULT_BACKEND_TTS_STATUS = "unconfigured"
+DEFAULT_ACTIVATION_PROFILE = "current"
+ACTIVATION_PROFILES: dict[str, dict[str, Any]] = {
+    "current": {},
+    "managed-rag": {
+        "backend_runtime": {
+            "embedding_provider": "openai",
+            "vector_store_provider": "pinecone",
+        },
+    },
+    "voice": {
+        "frontend_flags": {
+            "voiceEnabled": True,
+        },
+        "backend_tts_status": "ok",
+    },
+    "persistence": {
+        "frontend_flags": {
+            "persistenceEnabled": True,
+        },
+    },
+    "full-activation": {
+        "frontend_flags": {
+            "voiceEnabled": True,
+            "persistenceEnabled": True,
+        },
+        "backend_runtime": {
+            "embedding_provider": "openai",
+            "vector_store_provider": "pinecone",
+        },
+        "backend_tts_status": "ok",
+    },
+}
 FRONTEND_FLAG_ENV = {
     "ragEnabled": "STRATUM_AUDIT_EXPECT_RAG_ENABLED",
     "voiceEnabled": "STRATUM_AUDIT_EXPECT_VOICE_ENABLED",
@@ -238,7 +270,22 @@ def argparse_tts_status(value: str) -> str:
 
 
 def expectations_from_args(args: argparse.Namespace, parser: argparse.ArgumentParser) -> RuntimeExpectations:
+    profile = ACTIVATION_PROFILES[args.activation_profile]
+
     frontend_flags = dict(DEFAULT_FRONTEND_FLAGS)
+    frontend_flags.update(profile.get("frontend_flags", {}))
+
+    frontend_max_intake_questions = int(
+        profile.get("frontend_max_intake_questions", DEFAULT_FRONTEND_MAX_INTAKE_QUESTIONS)
+    )
+
+    backend_runtime = dict(DEFAULT_BACKEND_RUNTIME)
+    backend_runtime.update(profile.get("backend_runtime", {}))
+
+    backend_tts_status = str(
+        profile.get("backend_tts_status", DEFAULT_BACKEND_TTS_STATUS)
+    )
+
     for key, env_name in FRONTEND_FLAG_ENV.items():
         raw = os.getenv(env_name)
         if raw is None:
@@ -248,7 +295,6 @@ def expectations_from_args(args: argparse.Namespace, parser: argparse.ArgumentPa
         except ValueError as exc:
             parser.error(f"{env_name}: {exc}")
 
-    frontend_max_intake_questions = DEFAULT_FRONTEND_MAX_INTAKE_QUESTIONS
     raw_max_intake_questions = os.getenv(FRONTEND_MAX_INTAKE_QUESTIONS_ENV)
     if raw_max_intake_questions is not None:
         try:
@@ -256,7 +302,6 @@ def expectations_from_args(args: argparse.Namespace, parser: argparse.ArgumentPa
         except ValueError as exc:
             parser.error(f"{FRONTEND_MAX_INTAKE_QUESTIONS_ENV}: {exc}")
 
-    backend_runtime = dict(DEFAULT_BACKEND_RUNTIME)
     for key, env_name in BACKEND_RUNTIME_ENV.items():
         raw = os.getenv(env_name)
         if raw is None:
@@ -266,7 +311,6 @@ def expectations_from_args(args: argparse.Namespace, parser: argparse.ArgumentPa
         except ValueError as exc:
             parser.error(f"{env_name}: {exc}")
 
-    backend_tts_status = DEFAULT_BACKEND_TTS_STATUS
     raw_tts_status = os.getenv(BACKEND_TTS_STATUS_ENV)
     if raw_tts_status is not None:
         try:
@@ -521,7 +565,7 @@ def inspect_backend_public(
     if tts_status == expectations.backend_tts_status:
         audit.ok("backend TTS status", str(tts_status))
     else:
-        audit.warn(
+        audit.blocked(
             "backend TTS status",
             f"got {tts_status!r}, expected {expectations.backend_tts_status!r}",
         )
@@ -633,6 +677,19 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--frontend-url", default=DEFAULT_FRONTEND_URL)
     parser.add_argument("--backend-url", default=DEFAULT_BACKEND_URL)
     parser.add_argument("--skip-github", action="store_true", help="Only check public runtime endpoints.")
+    parser.add_argument(
+        "--activation-profile",
+        choices=sorted(ACTIVATION_PROFILES),
+        default=DEFAULT_ACTIVATION_PROFILE,
+        help=(
+            "Named expectation bundle for staged activation proof. "
+            "`current` matches today's gated-off production runtime; "
+            "`managed-rag` expects OpenAI/Pinecone; `voice` expects voice/TTS on; "
+            "`persistence` expects conversation persistence on; "
+            "`full-activation` combines managed RAG, voice, and persistence. "
+            "Specific --expected-* flags and STRATUM_AUDIT_EXPECT_* env vars still override the profile."
+        ),
+    )
     parser.add_argument(
         "--include-conversation-matrix",
         action="store_true",
@@ -785,6 +842,7 @@ def main() -> int:
                 "backendUrl": backend_url,
                 "frontendMain": frontend_sha[:7] if frontend_sha else None,
                 "backendMain": backend_sha[:7] if backend_sha else None,
+                "activationProfile": args.activation_profile,
                 "conversationMatrix": summarize_conversation_matrix(conversation_matrix),
                 "expectations": {
                     "frontendFlags": expectations.frontend_flags,

@@ -70,6 +70,57 @@ def test_release_audit_expectation_cli_overrides_env(
     assert args.expectations.backend_tts_status == "ok"
 
 
+def test_release_audit_full_activation_profile_sets_future_expectations(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    clear_expectation_env(monkeypatch)
+
+    args = live_release_audit.parse_args(
+        ["--skip-github", "--activation-profile", "full-activation"]
+    )
+
+    assert args.expectations.frontend_flags == {
+        "ragEnabled": True,
+        "voiceEnabled": True,
+        "persistenceEnabled": True,
+    }
+    assert args.expectations.frontend_max_intake_questions == 7
+    assert args.expectations.backend_runtime == {
+        "graph_runtime": "langgraph",
+        "session_store_backend": "postgres",
+        "embedding_provider": "openai",
+        "vector_store_provider": "pinecone",
+        "llm_provider": "writer",
+    }
+    assert args.expectations.backend_tts_status == "ok"
+
+
+def test_release_audit_explicit_flags_override_activation_profile(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    clear_expectation_env(monkeypatch)
+
+    args = live_release_audit.parse_args(
+        [
+            "--skip-github",
+            "--activation-profile",
+            "full-activation",
+            "--expected-voice-enabled",
+            "false",
+            "--expected-vector-store-provider",
+            "chroma",
+            "--expected-tts-status",
+            "unconfigured",
+        ]
+    )
+
+    assert args.expectations.frontend_flags["voiceEnabled"] is False
+    assert args.expectations.frontend_flags["persistenceEnabled"] is True
+    assert args.expectations.backend_runtime["embedding_provider"] == "openai"
+    assert args.expectations.backend_runtime["vector_store_provider"] == "chroma"
+    assert args.expectations.backend_tts_status == "unconfigured"
+
+
 def test_release_audit_rejects_unsafe_provider_expectations(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
@@ -281,5 +332,66 @@ def test_backend_public_audit_uses_configured_provider_expectations(
     assert any(
         record.name == "backend runtime vector_store_provider"
         and record.detail == "pinecone"
+        for record in audit.records
+    )
+
+
+def test_backend_public_audit_blocks_expected_tts_activation_mismatch(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def fake_fetch_json(
+        url: str,
+        timeout: float = 15.0,
+        headers: dict[str, str] | None = None,
+    ) -> tuple[int, dict[str, object], dict[str, str]]:
+        if url.endswith("/api/health"):
+            return (
+                200,
+                {
+                    "status": "healthy",
+                    "backend_enabled": True,
+                    "rag": {"status": "ok", "vectorStoreConnected": True},
+                    "tts": {"status": "unconfigured", "provider": "elevenlabs"},
+                },
+                {"access-control-allow-origin": live_release_audit.DEFAULT_FRONTEND_URL},
+            )
+        if url.endswith("/api/runtime"):
+            return (
+                200,
+                {
+                    "status": "online",
+                    "graph_runtime": "langgraph",
+                    "session_store_backend": "postgres",
+                    "embedding_provider": "hash",
+                    "vector_store_provider": "chroma",
+                    "llm_provider": "writer",
+                    "database_configured": True,
+                    "llm_configured": True,
+                    "notifications_configured": True,
+                    "required_cors_origins_present": True,
+                },
+                {},
+            )
+        raise AssertionError(f"unexpected URL: {url}")
+
+    monkeypatch.setattr(live_release_audit, "fetch_json", fake_fetch_json)
+    audit = live_release_audit.Audit()
+    expectations = live_release_audit.RuntimeExpectations(
+        frontend_flags=dict(live_release_audit.DEFAULT_FRONTEND_FLAGS),
+        frontend_max_intake_questions=live_release_audit.DEFAULT_FRONTEND_MAX_INTAKE_QUESTIONS,
+        backend_runtime=dict(live_release_audit.DEFAULT_BACKEND_RUNTIME),
+        backend_tts_status="ok",
+    )
+
+    live_release_audit.inspect_backend_public(
+        audit,
+        live_release_audit.DEFAULT_BACKEND_URL,
+        expectations,
+    )
+
+    assert audit.blockers == 1
+    assert any(
+        record.name == "backend TTS status"
+        and record.detail == "got 'unconfigured', expected 'ok'"
         for record in audit.records
     )

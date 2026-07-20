@@ -129,8 +129,28 @@ production posture: `ragEnabled=true`, `voiceEnabled=false`,
 `persistenceEnabled=false`, `maxIntakeQuestions=7`, `graph_runtime=langgraph`,
 `session_store_backend=postgres`, `embedding_provider=hash`,
 `vector_store_provider=chroma`, `llm_provider=writer`, and
-`tts.status=unconfigured`. During a planned runtime rollout, override those
-expectations with CLI flags such as:
+`tts.status=unconfigured`.
+
+During a planned runtime rollout, use a named activation profile to make the
+intended target state explicit:
+
+```bash
+.venv/bin/python scripts/live_release_audit.py --activation-profile managed-rag
+.venv/bin/python scripts/live_release_audit.py --activation-profile voice
+.venv/bin/python scripts/live_release_audit.py --activation-profile persistence
+.venv/bin/python scripts/live_release_audit.py --activation-profile full-activation
+```
+
+The profiles are non-mutating expectation bundles:
+
+- `current`: today's gated-off production runtime.
+- `managed-rag`: expects `embedding_provider=openai` and `vector_store_provider=pinecone`.
+- `voice`: expects frontend `voiceEnabled=true` and backend `tts.status=ok`.
+- `persistence`: expects frontend `persistenceEnabled=true`.
+- `full-activation`: combines managed RAG, voice, and persistence.
+
+Override individual expectations with CLI flags when a rollout intentionally
+differs from a profile:
 
 ```bash
 .venv/bin/python scripts/live_release_audit.py \

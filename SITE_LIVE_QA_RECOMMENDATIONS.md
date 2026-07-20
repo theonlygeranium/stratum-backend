@@ -16,9 +16,9 @@ Earlier notes that the frontend source was missing are now superseded. The sourc
 - Site: `https://edstratumlabs.ai`
 - Cloudflare Pages project: `edstratumlabs`
 - Cloudflare source: GitHub repo `theonlygeranium/edstratum-v2-frontend`
-- Latest frontend production commit verified locally and live before this report update: `e10a8cd`; the same-origin `/api/chat` proxy behavior was introduced in code-bearing commit `e1921ec`, with live-smoke assertions through `afce38b` and report evidence in `7365bee`.
-- Latest verified frontend asset set is from manifest commit `e10a8cd`; it confirms the seven-question STRATUM intake runtime contract and same-origin chat proxy path.
-- Frontend GitHub Actions action-migration commit verified: `d01ce68`; frontend CI app-runtime migration commit verified: `f2c969b`; CI Playwright server-ownership fix commit `84e01ce` is already contained in current `main`; Wrangler pin commit `76b97ba`, live-smoke command commit `bb8f3b4`, rendered live-smoke command commit `52cdf47`, asset-smoke hardening commit `7eb42dd`, Pages fallback fix commit `b341b07`, asset hash refresh commit `b51a623`, same-origin proxy commits through `7365bee`, and readiness test locator fix commit `e10a8cd` are deployed. Hosted CI proof is current again: frontend run `29754671275` for `e10a8cd` passed `170` Playwright tests after the repos were made public.
+- Last all-up audited frontend deployment before this report-maintenance pass: `64a1361`; the same-origin `/api/chat` proxy behavior was introduced in code-bearing commit `e1921ec`, with live-smoke assertions through `afce38b` and report evidence in `7365bee`.
+- Latest audited frontend asset set is from manifest commit `64a1361`; it confirms the seven-question STRATUM intake runtime contract and same-origin chat proxy path.
+- Frontend GitHub Actions action-migration commit verified: `d01ce68`; frontend CI app-runtime migration commit verified: `f2c969b`; CI Playwright server-ownership fix commit `84e01ce` is already contained in current `main`; Wrangler pin commit `76b97ba`, live-smoke command commit `bb8f3b4`, rendered live-smoke command commit `52cdf47`, asset-smoke hardening commit `7eb42dd`, Pages fallback fix commit `b341b07`, asset hash refresh commit `b51a623`, same-origin proxy commits through `7365bee`, readiness test locator fix commit `e10a8cd`, and governance report commit `64a1361` are deployed. Hosted CI proof is current again: frontend run `29755492608` for `64a1361` passed `170` Playwright tests after the repos were made public.
 - Current production entry asset: `/assets/index-C17Q75GX.js`
 - Current production stylesheet asset: `/assets/index-DH0EGGDC.css`
 - Current STRATUM chat asset: `/assets/StratumChat-93aBKZtk.js`
@@ -26,16 +26,17 @@ Earlier notes that the frontend source was missing are now superseded. The sourc
 - Current PDF snapshot assets: `/assets/stratumPDF-Bgc_chGe.js`, `/assets/pdf-vendor-B7fMFYQc.js`
 - Current public build manifest: `https://edstratumlabs.ai/build-manifest.json`
 - Backend: `https://stratum-backend-production-a340.up.railway.app`
-- Latest backend code-bearing runtime/tooling commit verified: `3a483cb`; latest backend main/hosted CI commit verified before this report update: `3ad3ea9` (`docs: record direct deploy fallback QA`).
+- Latest backend code-bearing runtime/tooling commit verified: `3a483cb`; latest backend main/hosted CI commit verified before this report-maintenance pass: `c80d121` (`docs: refresh release governance QA state`).
 - Latest backend workflow/action-migration commit with hosted CI proof: `f7dced4`
-- Latest backend runtime/tooling commit verified locally, deployed on Railway, and live-smoked: `3a483cb`; latest backend docs/direct-deploy fallback report commit verified with hosted CI and Railway status: `3ad3ea9`.
-- Public backend health/runtime routes remain healthy after the source pushes; GitHub status for `3ad3ea9` reports Railway deployment success and backend hosted CI run `29753270486` completed successfully with the `Pytest & RAG eval` job plus `Backend CI / pytest-and-rag` commit status.
+- Latest backend runtime/tooling commit verified locally, deployed on Railway, and live-smoked: `3a483cb`; latest backend docs/governance report commit verified with hosted CI and Railway status: `c80d121`.
+- Public backend health/runtime routes remain healthy after the source pushes; GitHub status for `c80d121` reports Railway deployment success and backend hosted CI run `29755492955` completed successfully with the `Pytest & RAG eval` job plus `Backend CI / pytest-and-rag` commit status.
 - Backend runtime previously verified: Writer/Palmyra generation, hash embeddings, Railway Postgres-backed graph/session state
 
 ## QA Summary
 
 - Backend health, runtime, pytest suite, RAG eval, and deployed conversation matrix passed in the backend live QA pass.
-- Post-public-repo governance QA passed on 2026-07-20: frontend `main` branch protection requires `CI / build-and-test`, backend `main` branch protection requires `Backend CI / pytest-and-rag`, latest hosted CI is green in both repos, and `.venv/bin/python scripts/live_release_audit.py --include-conversation-matrix` passed with `0` blockers.
+- Post-public-repo governance QA passed on 2026-07-20: frontend `main` branch protection requires `CI / build-and-test`, backend `main` branch protection requires `Backend CI / pytest-and-rag`, latest hosted CI is green in both repos, and `.venv/bin/python scripts/live_release_audit.py --include-conversation-matrix` passed with `0` blockers for frontend `64a1361` and backend `c80d121`.
+- Release audit activation profiles are source-ready for future rollout proof: `current`, `managed-rag`, `voice`, `persistence`, and `full-activation`. A public-only `--activation-profile full-activation` check now blocks on the expected inactive pieces: frontend `voiceEnabled`, frontend `persistenceEnabled`, backend `tts.status=ok`, backend `embedding_provider=openai`, and backend `vector_store_provider=pinecone`.
 - Frontend source build passes `npm run build`.
 - Local frontend production preview passed desktop and mobile chatbot open/respond checks in mock mode.
 - Live production domain loads the source-built frontend entrypoint.
@@ -210,7 +211,7 @@ Earlier notes that the frontend source was missing are now superseded. The sourc
 
 ## Current SOT Blockers
 
-- No active release-governance blocker remained in the post-protection audit on 2026-07-20: frontend `main` requires `CI / build-and-test`, backend `main` requires `Backend CI / pytest-and-rag`, latest hosted CI is green in both repos, Cloudflare Pages is green for frontend `e10a8cd`, Railway is green for backend `3ad3ea9`, and `.venv/bin/python scripts/live_release_audit.py --include-conversation-matrix` passed with `0` blockers.
+- No active release-governance blocker remained in the latest all-up audit before this report-maintenance pass on 2026-07-20: frontend `main` requires `CI / build-and-test`, backend `main` requires `Backend CI / pytest-and-rag`, hosted CI was green in both repos, Cloudflare Pages was green for frontend `64a1361`, Railway was green for backend `c80d121`, and `.venv/bin/python scripts/live_release_audit.py --include-conversation-matrix` passed with `0` blockers.
 - Cloudflare KV rate limiting is not active in production. Live rapid `/api/config` probes did not produce HTTP 429, and the middleware skips enforcement until `RATE_LIMIT` is bound.
 - Cloudflare analytics aggregation is not active in production. Live `/api/analytics` returns `503 analytics_not_configured` until `ANALYTICS_EVENTS` is bound.
 - Cloudflare D1 conversation persistence is not active. `/api/config` returns `persistenceEnabled: false`, and `/api/sessions/.../messages` returns `503 d1_not_configured`.
@@ -270,8 +271,8 @@ Earlier notes that the frontend source was missing are now superseded. The sourc
 4. Create and bind Cloudflare KV namespaces `STRATUM_CONFIG` and `RATE_LIMIT` once credentials are available.
 5. Create D1 database `stratum-conversations`, run `schema.sql`, bind it as `STRATUM_DB`, add `SESSION_SECRET`, choose an operational purge cadence using `/api/sessions/purge`, then set KV runtime `persistenceEnabled: true` only after a live smoke plan is ready.
 6. Configure voice/TTS only after a safe rollout plan: set Railway `ELEVENLABS_API_KEY`, optional `ELEVENLABS_VOICE_ID`, Cloudflare Pages `VITE_TTS_ENABLED=true`, then KV runtime `voiceEnabled: true`.
-7. Activate managed RAG providers only after staging smoke: set Railway `EMBEDDING_PROVIDER=openai`, `VECTOR_STORE_PROVIDER=pinecone`, `PINECONE_API_KEY`, `PINECONE_INDEX`, optional `PINECONE_NAMESPACE`, then verify `/api/runtime` reports `openai`/`pinecone` and RAG eval remains above threshold.
+7. Activate managed RAG providers only after staging smoke: set Railway `EMBEDDING_PROVIDER=openai`, `VECTOR_STORE_PROVIDER=pinecone`, `PINECONE_API_KEY`, `PINECONE_INDEX`, optional `PINECONE_NAMESPACE`, then verify `/api/runtime` reports `openai`/`pinecone` and RAG eval remains above threshold. Use `.venv/bin/python scripts/live_release_audit.py --activation-profile managed-rag` as the non-mutating public runtime proof.
 8. Keep frontend `main` branch protection requiring `CI / build-and-test` and backend `main` branch protection requiring `Backend CI / pytest-and-rag`.
-9. Use `EXPECTED_MANIFEST_COMMIT=<short-sha> npm run qa:live` as the first frontend deploy verification check, `EXPECTED_MANIFEST_COMMIT=<short-sha> npm run qa:live:rendered` for rendered production proof, and `.venv/bin/python scripts/live_backend_smoke.py` after backend deploys. If the normal GitHub-connected backend deploy path is blocked, use `CONFIRM_DIRECT_RAILWAY_DEPLOY=yes ./scripts/railway_direct_deploy.sh` and then push/copy the deployed source back to GitHub.
+9. Use `EXPECTED_MANIFEST_COMMIT=<short-sha> npm run qa:live` as the first frontend deploy verification check, `EXPECTED_MANIFEST_COMMIT=<short-sha> npm run qa:live:rendered` for rendered production proof, and `.venv/bin/python scripts/live_backend_smoke.py` after backend deploys. Use `.venv/bin/python scripts/live_release_audit.py --activation-profile voice`, `--activation-profile persistence`, or `--activation-profile full-activation` when those rollout states are intentionally enabled. If the normal GitHub-connected backend deploy path is blocked, use `CONFIRM_DIRECT_RAILWAY_DEPLOY=yes ./scripts/railway_direct_deploy.sh` and then push/copy the deployed source back to GitHub.
 10. Prefer scoped Cloudflare deploy tokens over global credentials, and keep deploy credentials out of checked-in files.
 11. Bind Cloudflare KV namespace `ANALYTICS_EVENTS` to activate the source-ready aggregate chatbot analytics counters, then verify `/api/analytics` returns `202` for an allowlisted test event.
