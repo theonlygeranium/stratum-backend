@@ -46,6 +46,7 @@ class StratumState(TypedDict):
     source_confidence: dict[str, Any] | None
     citations: list[dict[str, Any]]
     escalation_trigger: EscalationTrigger
+    escalation: dict[str, Any] | None
     escalation_context: dict[str, Any] | None
     response_text: str
     snapshot: dict[str, Any] | None
@@ -69,6 +70,7 @@ def initial_state_from_request(request: ChatRequest) -> StratumState:
         "source_confidence": None,
         "citations": [],
         "escalation_trigger": None,
+        "escalation": None,
         "escalation_context": None,
         "response_text": "",
         "snapshot": None,
@@ -134,6 +136,9 @@ def state_update_from_result(result: StratumResult) -> dict[str, Any]:
             citation.model_dump(mode="json") for citation in result.citations
         ],
         "escalation_trigger": result.escalate,
+        "escalation": (
+            result.escalation.model_dump(mode="json") if result.escalation else None
+        ),
         "response_text": result.response_text,
         "snapshot": result.snapshot.model_dump(mode="json") if result.snapshot else None,
         "result": result.model_dump(mode="json"),

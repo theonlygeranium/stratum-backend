@@ -11,6 +11,9 @@ ProcessingPhase = Literal[
 ConversationMode = Literal["open", "intake", "about", "escalation"]
 EscalationTriggerValue = Literal["explicit", "confidence", "high_intent", "sentiment"]
 EscalationTrigger: TypeAlias = EscalationTriggerValue | None
+EscalationDeliveryStatus = Literal[
+    "sent", "prepared", "failed", "rate_limited", "suppressed"
+]
 
 
 class ContractModel(BaseModel):
@@ -55,6 +58,13 @@ class ChatRequest(BaseModel):
     session_id: str = Field(alias="sessionId")
 
 
+class EscalationDelivery(ContractModel):
+    success: bool
+    status: EscalationDeliveryStatus
+    messageId: str | None = None
+    error: str | None = None
+
+
 class StratumResult(ContractModel):
     phases: list[ProcessingPhase] = Field(min_length=1)
     source: SourceConfidence | None = None
@@ -62,6 +72,18 @@ class StratumResult(ContractModel):
     response_text: str
     snapshot: ReadinessSnapshot | None = None
     escalate: EscalationTrigger = None
+    escalation: EscalationDelivery | None = None
+
+
+class EscalationRequest(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
+    lead_name: str | None = Field(default=None, alias="leadName")
+    lead_email: str | None = Field(default=None, alias="leadEmail")
+    intake_summary: dict[str, str] = Field(default_factory=dict, alias="intakeSummary")
+    escalation_reason: str = Field(alias="escalationReason")
+    session_id: str = Field(alias="sessionId")
+    timestamp: str | None = None
 
 
 class RagHealth(ContractModel):
@@ -133,6 +155,7 @@ class DoneEvent(ContractModel):
     type: Literal["done"]
     snapshot: ReadinessSnapshot | None = None
     escalate: EscalationTrigger = None
+    escalation: EscalationDelivery | None = None
 
 
 class ErrorEvent(ContractModel):

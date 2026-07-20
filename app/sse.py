@@ -22,6 +22,8 @@ _STREAM_EVENT_ADAPTER = TypeAdapter(StreamEvent)
 def sse_event(payload: StreamEvent | dict) -> str:
     event = _STREAM_EVENT_ADAPTER.validate_python(payload)
     data = event.model_dump(mode="json", by_alias=True)
+    if data.get("type") == "done" and data.get("escalation") is None:
+        data.pop("escalation", None)
     return f"data: {json.dumps(data, separators=(',', ':'))}\n\n"
 
 
@@ -34,7 +36,12 @@ def stream_events(result: StratumResult) -> Iterable[StreamEvent]:
         yield TokenEvent(type="token", token=token)
     if result.citations:
         yield CitationsEvent(type="citations", data=result.citations)
-    yield DoneEvent(type="done", snapshot=result.snapshot, escalate=result.escalate)
+    yield DoneEvent(
+        type="done",
+        snapshot=result.snapshot,
+        escalate=result.escalate,
+        escalation=result.escalation,
+    )
 
 
 def token_chunks(text: str) -> Iterable[str]:

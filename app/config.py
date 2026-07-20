@@ -107,8 +107,14 @@ def get_settings() -> Settings:
             "gpt-4o-mini" if llm_provider == "openai" else "palmyra-x5",
         ),
         resend_api_key=os.getenv("RESEND_API_KEY") or None,
-        jeffrey_email=os.getenv("JEFFREY_EMAIL") or None,
+        jeffrey_email=(
+            os.getenv("ESCALATION_EMAIL_TO")
+            or os.getenv("JEFFREY_EMAIL")
+            or None
+        ),
         resend_from_email=(
-            os.getenv("RESEND_FROM_EMAIL") or "stratum@edstratumlabs.ai"
+            os.getenv("ESCALATION_EMAIL_FROM")
+            or os.getenv("RESEND_FROM_EMAIL")
+            or "stratum@edstratumlabs.ai"
         ),
     )

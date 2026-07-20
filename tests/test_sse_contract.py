@@ -16,7 +16,13 @@ from app.graph import (
     route_key,
     route_node,
 )
-from app.models import ChatRequest, ReadinessSnapshot, SourceConfidence, StratumResult
+from app.models import (
+    ChatRequest,
+    EscalationDelivery,
+    ReadinessSnapshot,
+    SourceConfidence,
+    StratumResult,
+)
 from app.sse import sse_event
 import app.main as main_module
 
@@ -157,7 +163,11 @@ def test_open_mode_emits_required_sse_order() -> None:
     assert set(events[citations_index]["data"][0]) == {"source", "excerpt"}
     assert events[-1]["type"] == "done"
     assert [event["type"] for event in events].count("done") == 1
-    assert events[-1] == {"type": "done", "snapshot": None, "escalate": None}
+    assert events[-1] == {
+        "type": "done",
+        "snapshot": None,
+        "escalate": None,
+    }
     assert any(event.get("type") == "token" for event in events)
 
 
@@ -251,7 +261,12 @@ def test_agent_stream_uses_graph_runtime_for_state_machine_modes(
 
     assert calls == ["contract-stream-graph-about"]
     assert events[0] == {"type": "phase", "phase": "composing"}
-    assert events[-1] == {"type": "done", "snapshot": None, "escalate": None}
+    assert events[-1] == {
+        "type": "done",
+        "snapshot": None,
+        "escalate": None,
+        "escalation": None,
+    }
     assert "graph-backed" == "".join(
         event["token"] for event in events if event["type"] == "token"
     )
@@ -341,7 +356,12 @@ def test_agent_open_stream_uses_graph_updates_and_checkpoints_result(
     assert "".join(event["token"] for event in events if event["type"] == "token") == (
         "Here is the grounded read: graph token"
     )
-    assert events[-1] == {"type": "done", "snapshot": None, "escalate": None}
+    assert events[-1] == {
+        "type": "done",
+        "snapshot": None,
+        "escalate": None,
+        "escalation": None,
+    }
 
 
 def test_chat_stream_uses_sse_headers() -> None:
@@ -386,6 +406,7 @@ def test_explicit_escalation() -> None:
     assert events[0] == {"type": "phase", "phase": "escalating"}
     assert events[-1]["type"] == "done"
     assert events[-1]["escalate"] == "explicit"
+    assert events[-1]["escalation"]["status"] == "prepared"
     text = "".join(event["token"] for event in events if event["type"] == "token")
     assert "I've prepared a summary for the Founding leadership team" in text
     assert "James from the Founding leadership team" not in text
@@ -397,8 +418,12 @@ def test_explicit_escalation() -> None:
 def test_confirmed_escalation_notification_copy_says_sent(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    async def successful_notify(*args, **kwargs) -> bool:
-        return True
+    async def successful_notify(*args, **kwargs) -> EscalationDelivery:
+        return EscalationDelivery(
+            success=True,
+            status="sent",
+            messageId="test-message",
+        )
 
     monkeypatch.setattr(main_module.agent, "_notify_only", successful_notify)
     request = ChatRequest.model_validate(
@@ -420,6 +445,8 @@ def test_confirmed_escalation_notification_copy_says_sent(
     result = asyncio.run(main_module.agent.respond(request))
 
     assert "I've sent the Founding leadership team a summary" in result.response_text
+    assert result.escalation is not None
+    assert result.escalation.status == "sent"
     assert "James from the Founding leadership team will get back to you" in (
         result.response_text
     )
@@ -429,10 +456,11 @@ def test_confirmed_escalation_notification_copy_says_sent(
 
 
 def test_eval_header_suppresses_escalation_notification(monkeypatch) -> None:
-    async def fail_notify(*args, **kwargs) -> None:
-        raise AssertionError("eval smoke tests must not send notifications")
+    async def qa_notify(*args, **kwargs) -> EscalationDelivery:
+        assert kwargs["suppress_notifications"] is True
+        return EscalationDelivery(success=True, status="suppressed")
 
-    monkeypatch.setattr(main_module.agent, "_notify_only", fail_notify)
+    monkeypatch.setattr(main_module.agent, "_notify_only", qa_notify)
     response = client.post(
         "/api/chat",
         json={
@@ -456,15 +484,17 @@ def test_eval_header_suppresses_escalation_notification(monkeypatch) -> None:
     assert response.status_code == 200
     assert events[0] == {"type": "phase", "phase": "escalating"}
     assert events[-1]["escalate"] == "explicit"
+    assert events[-1]["escalation"]["status"] == "suppressed"
 
 
 def test_eval_header_suppresses_high_intent_intake_notification(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    async def fail_notify(*args, **kwargs) -> None:
-        raise AssertionError("eval smoke tests must not send notifications")
+    async def qa_notify(*args, **kwargs) -> EscalationDelivery:
+        assert kwargs["suppress_notifications"] is True
+        return EscalationDelivery(success=True, status="suppressed")
 
-    monkeypatch.setattr(main_module.agent, "_notify_only", fail_notify)
+    monkeypatch.setattr(main_module.agent, "_notify_only", qa_notify)
     response = client.post(
         "/api/chat",
         json={
@@ -496,13 +526,15 @@ def test_eval_header_suppresses_high_intent_intake_notification(
     assert response.status_code == 200
     assert events[-1]["snapshot"]["situation"]
     assert events[-1]["escalate"] == "high_intent"
+    assert events[-1]["escalation"]["status"] == "suppressed"
 
 
 def test_eval_header_suppresses_confidence_escalation_notification(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    async def fail_notify(*args, **kwargs) -> None:
-        raise AssertionError("eval smoke tests must not send notifications")
+    async def qa_notify(*args, **kwargs) -> EscalationDelivery:
+        assert kwargs["suppress_notifications"] is True
+        return EscalationDelivery(success=True, status="suppressed")
 
     retrieval = type(
         "Retrieval",
@@ -512,7 +544,7 @@ def test_eval_header_suppresses_confidence_escalation_notification(
             "source": SourceConfidence(label="", score=0.0, grounded=False),
         },
     )()
-    monkeypatch.setattr(main_module.agent, "_notify_only", fail_notify)
+    monkeypatch.setattr(main_module.agent, "_notify_only", qa_notify)
     monkeypatch.setattr(main_module.agent.retriever, "retrieve", lambda _: retrieval)
     main_module.agent.low_confidence_counts["contract-eval-confidence"] = 1
 
@@ -538,9 +570,48 @@ def test_eval_header_suppresses_confidence_escalation_notification(
 
     assert response.status_code == 200
     assert events[-1]["escalate"] == "confidence"
+    assert events[-1]["escalation"]["status"] == "suppressed"
     assert "I've prepared a summary" in "".join(
         event["token"] for event in events if event["type"] == "token"
     )
+
+
+def test_escalate_route_qa_header_returns_mock_success() -> None:
+    response = client.post(
+        "/api/escalate",
+        json={
+            "leadName": "Test Visitor",
+            "leadEmail": "visitor@example.com",
+            "intakeSummary": {"situation": "Testing handoff suppression"},
+            "escalationReason": "explicit",
+            "sessionId": "contract-route-qa",
+            "timestamp": "2026-07-20T00:00:00+00:00",
+        },
+        headers={"X-Stratum-QA": "true"},
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "success": True,
+        "status": "suppressed",
+        "messageId": "qa-suppressed",
+        "error": None,
+    }
+
+
+def test_escalate_route_returns_safe_failure_without_config() -> None:
+    response = client.post(
+        "/api/escalate",
+        json={
+            "intakeSummary": {},
+            "escalationReason": "explicit",
+            "sessionId": "contract-route-unconfigured",
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.json()["success"] is False
+    assert response.json()["status"] == "prepared"
 
 
 def test_frontend_mock_explicit_human_trigger() -> None:
@@ -674,6 +745,7 @@ def test_initial_graph_state_uses_api_contract_names() -> None:
     assert state["source_confidence"] is None
     assert state["citations"] == []
     assert state["escalation_trigger"] is None
+    assert state["escalation"] is None
     assert state["snapshot"] is None
     assert state["session_id"] == "contract-graph"
     assert route_key(state) == "intake"

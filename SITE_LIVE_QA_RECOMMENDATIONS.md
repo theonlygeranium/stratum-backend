@@ -53,11 +53,17 @@ Earlier notes that the frontend source was missing are now superseded. The sourc
 - Enhancement spec Feature 1 citation delta is deployed on the Python/FastAPI backend: `RagCitation`, `citations` SSE events before terminal `done`, citation extraction from retrieved KB chunks, graph checkpoint preservation, and RAG health in `/api/health`.
 - Local and production QA passed on 2026-07-20. Railway CLI auth was unavailable in the shell, so public health/runtime/SSE endpoints were used as deployment evidence.
 
+## Feature 2 Branch Status
+
+- Branch `feat/escalation-email` adds structured escalation delivery metadata, branded Resend HTML plus plaintext payloads, safe `/api/escalate`, session-scoped rate limiting, env aliases `ESCALATION_EMAIL_TO` / `ESCALATION_EMAIL_FROM`, and QA suppression for `X-Stratum-QA` and `X-Stratum-Eval`.
+- Local branch QA passed on 2026-07-20: `./.venv/bin/pytest -q` (`116 passed, 1 skipped`).
+- Pending post-merge checks: public `/api/escalate` with `X-Stratum-QA: true`, public `/api/chat` escalation path with `X-Stratum-Eval: true`, and live frontend confirmation UI through a suppressed or mock path only.
+
 ## Recommended Next Steps
 
 1. Add/verify Cloudflare preview env var `VITE_STRATUM_API_URL` if preview branches should exercise the live backend instead of mock chat.
 2. Keep frontend Playwright tests for homepage render, chatbot open, prompt submit, mobile layout, and discretion-safe copy.
-3. Add a staging or eval-only backend path for escalation QA that cannot send live notifications.
+3. Merge and deploy Feature 2, then verify the suppression path before any live escalation QA that could otherwise send email.
 4. Add CI for `npm ci`, `npm run build`, and forbidden-copy scans.
 5. Add a small public build manifest with git SHA, build timestamp, backend URL, and asset hashes for easier live verification.
 6. Prefer scoped Cloudflare deploy tokens over global credentials, and keep deploy credentials out of checked-in files.

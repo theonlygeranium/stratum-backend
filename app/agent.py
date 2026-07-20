@@ -28,6 +28,7 @@ from app.models import (
     ChatRequest,
     CitationsEvent,
     DoneEvent,
+    EscalationDelivery,
     PhaseEvent,
     RagCitation,
     ReadinessSnapshot,
@@ -285,23 +286,26 @@ class StratumAgent:
             await self.session_store.set_low_confidence_count(request.session_id, count)
             if count >= 2:
                 yield PhaseEvent(type="phase", phase="escalating")
-                notification_sent = False
-                if not suppress_notifications:
-                    notification_sent = await self._notify_only(
-                        request,
-                        "confidence",
-                        None,
-                    )
+                delivery = await self._notify_only(
+                    request,
+                    "confidence",
+                    None,
+                    suppress_notifications=suppress_notifications,
+                )
                 yield SourceEvent(type="source", source=retrieval.source)
                 async for event in self._stream_text(
                     self._handoff_message(
                         request,
                         "confidence",
-                        notification_sent=notification_sent,
+                        notification_sent=delivery.status == "sent",
                     )
                 ):
                     yield event
-                yield DoneEvent(type="done", escalate="confidence")
+                yield DoneEvent(
+                    type="done",
+                    escalate="confidence",
+                    escalation=delivery,
+                )
                 return
 
             yield PhaseEvent(type="phase", phase="composing")
@@ -357,6 +361,7 @@ class StratumAgent:
             type="done",
             snapshot=result.snapshot,
             escalate=result.escalate,
+            escalation=result.escalation,
         )
 
     async def _stream_text(self, text: str) -> AsyncGenerator[TokenEvent, None]:
@@ -492,15 +497,22 @@ class StratumAgent:
             trigger = "high_intent" if high_intent else None
             if high_intent:
                 response = f"{response}\n\n{HIGH_INTENT_ESCALATION_MESSAGE}"
-                if not (
-                    suppress_notifications or _SUPPRESS_NOTIFICATIONS.get()
-                ):
-                    await self._notify_only(request, "high_intent", snapshot)
+                delivery = await self._notify_only(
+                    request,
+                    "high_intent",
+                    snapshot,
+                    suppress_notifications=(
+                        suppress_notifications or _SUPPRESS_NOTIFICATIONS.get()
+                    ),
+                )
+            else:
+                delivery = None
             return StratumResult(
                 phases=["assessing", "composing"],
                 response_text=response,
                 snapshot=snapshot,
                 escalate=trigger,
+                escalation=delivery,
             )
 
         question = INTAKE_QUESTIONS[index]
@@ -527,18 +539,22 @@ class StratumAgent:
         )
 
     async def _escalate(self, request: ChatRequest, trigger: str) -> StratumResult:
-        notification_sent = False
-        if not _SUPPRESS_NOTIFICATIONS.get():
-            notification_sent = await self._notify_only(request, trigger, None)
+        delivery = await self._notify_only(
+            request,
+            trigger,
+            None,
+            suppress_notifications=_SUPPRESS_NOTIFICATIONS.get(),
+        )
         message = self._handoff_message(
             request,
             trigger,
-            notification_sent=notification_sent,
+            notification_sent=delivery.status == "sent",
         )
         return StratumResult(
             phases=["escalating"],
             response_text=message,
             escalate=trigger,  # type: ignore[arg-type]
+            escalation=delivery,
         )
 
     async def _notify_only(
@@ -546,9 +562,15 @@ class StratumAgent:
         request: ChatRequest,
         trigger: str,
         snapshot: ReadinessSnapshot | None,
-    ) -> bool:
+        *,
+        suppress_notifications: bool = False,
+    ) -> EscalationDelivery:
         payload = build_payload(request, trigger, snapshot)
-        return await send_or_log_escalation(self.settings, payload)
+        return await send_or_log_escalation(
+            self.settings,
+            payload,
+            suppress_notifications=suppress_notifications,
+        )
 
     def _handoff_message(
         self,
