@@ -18,7 +18,7 @@ Earlier notes that the frontend source was missing are now superseded. The sourc
 - Cloudflare source: GitHub repo `theonlygeranium/edstratum-v2-frontend`
 - Latest frontend production code-bearing commit verified: `36f201f`
 - Latest verified code-bearing frontend manifest commit: `36f201f`; docs-only pushes can advance the manifest git SHA while leaving code-bearing asset hashes unchanged.
-- Frontend GitHub Actions action-migration commit verified: `d01ce68`; later report-only pushes can advance the manifest git SHA while leaving code-bearing asset hashes unchanged.
+- Frontend GitHub Actions action-migration commit verified: `d01ce68`; frontend CI app-runtime migration commit verified: `f2c969b`. Later report-only pushes can advance the manifest git SHA while leaving code-bearing asset hashes unchanged.
 - Current production entry asset: `/assets/index-Cld5-OrE.js`
 - Current production stylesheet asset: `/assets/index-DH0EGGDC.css`
 - Current STRATUM chat asset: `/assets/StratumChat-5iN0axbq.js`
@@ -114,8 +114,10 @@ Earlier notes that the frontend source was missing are now superseded. The sourc
   - Local backend QA passed on 2026-07-20: shell syntax checks for deploy helpers, `git diff --check`, dry-run Cloudflare env helper, live SEO/build-manifest verification, full pytest (`129 passed, 1 skipped`), and RAG eval (`passed: true`, recall@10 `1.0`, groundedness proxy `1.0`) using `hash`/`chroma`/`heuristic`.
   - Hosted backend CI runs `29734912402` and `29735038155` passed, Railway deployment status for `728f217` returned `success`, and safe public health/runtime smoke remained healthy.
 - GitHub Actions Node 24 migration update:
-  - Frontend commit `d01ce68` updates CI action pins to `actions/checkout@v5`, `actions/setup-node@v5`, `actions/upload-artifact@v6`, and `actions/github-script@v8` while leaving the frontend app build runtime at `node-version: '20'`. Hosted main CI `29739390956` passed with `156 passed`; strict log search found no deprecated Node.js 20 JavaScript-action warning. Live `/build-manifest.json` returned commit `d01ce68` with unchanged code-bearing assets `/assets/index-Cld5-OrE.js`, `/assets/index-DH0EGGDC.css`, and `/assets/StratumChat-5iN0axbq.js`.
+  - Frontend commit `d01ce68` updates CI action pins to `actions/checkout@v5`, `actions/setup-node@v5`, `actions/upload-artifact@v6`, and `actions/github-script@v8`; the separate frontend app runtime was later migrated in `f2c969b`. Hosted main CI `29739390956` passed with `156 passed`; strict log search found no deprecated Node.js 20 JavaScript-action warning. Live `/build-manifest.json` returned commit `d01ce68` with unchanged code-bearing assets `/assets/index-Cld5-OrE.js`, `/assets/index-DH0EGGDC.css`, and `/assets/StratumChat-5iN0axbq.js`.
   - Backend commit `f7dced4` updates CI action pins to `actions/checkout@v5`, `actions/setup-python@v6`, `actions/upload-artifact@v6`, and `actions/github-script@v8` while leaving the backend Python runtime at `3.11`. Hosted backend CI run `29739391077` passed, GitHub status for `f7dced4` is `success`, Railway deployment status is `success`, and public Railway `/api/health` plus `/api/runtime` remained healthy.
+- Frontend CI app-runtime Node 24 update:
+  - Frontend commit `f2c969b` updates hosted `actions/setup-node` `node-version` and the build-step `NODE_VERSION` marker from `20` to `24` while leaving frontend source output unchanged. Local Node 24 QA passed on 2026-07-20 with `node v24.18.0`, `npm ci`, `npm run type-check`, `npm run lint`, `npm run build`, Wrangler `4.112.0` Pages Functions build, and full Playwright with one worker (`156 passed`). Hosted main CI `29741097306` passed with `156 passed`; logs confirm `node-version: 24`, `node: v24.18.0`, and `wrangler 4.112.0`. Live `/build-manifest.json` returned commit `f2c969b` with unchanged code-bearing assets `/assets/index-Cld5-OrE.js`, `/assets/index-DH0EGGDC.css`, and `/assets/StratumChat-5iN0axbq.js`.
 
 ## Notes For Future Agents
 
@@ -143,7 +145,7 @@ Earlier notes that the frontend source was missing are now superseded. The sourc
 - Frontend commit `a2a9551` adds D1 deletion/retention purge primitives, same-origin microphone policy readiness, and same-origin `/api/tts` runtime fail-closed behavior.
 - Frontend commit `36f201f` adds privacy-safe aggregate chatbot analytics readiness and same-origin `/api/analytics`, gated by the optional Cloudflare KV binding `ANALYTICS_EVENTS`.
 - Backend commit `728f217` keeps deploy helpers aligned with current runtime env names and makes optional managed RAG/TTS variables explicit without printing secret values.
-- Frontend commit `d01ce68` and backend commit `f7dced4` migrate GitHub Actions to Node 24-native action majors. This does not change the frontend app `node-version: '20'` or backend Python `3.11` runtime choices.
+- Frontend commit `d01ce68` and backend commit `f7dced4` migrate GitHub Actions to Node 24-native action majors. Frontend commit `f2c969b` also moves the hosted frontend app CI runtime to Node 24; backend Python remains `3.11`.
 
 ## Current SOT Blockers
 
@@ -212,4 +214,4 @@ Earlier notes that the frontend source was missing are now superseded. The sourc
 9. Use `/build-manifest.json` as the first frontend deploy verification check before deeper rendered QA.
 10. Prefer scoped Cloudflare deploy tokens over global credentials, and keep deploy credentials out of checked-in files.
 11. Bind Cloudflare KV namespace `ANALYTICS_EVENTS` to activate the source-ready aggregate chatbot analytics counters, then verify `/api/analytics` returns `202` for an allowlisted test event.
-12. Evaluate a separate frontend CI app-runtime move from Node 20 to Node 24, or pin Wrangler to a Node 20-compatible version, because the action-runtime migration did not change the app runtime.
+12. Consider pinning Wrangler as a frontend devDependency so Pages Functions CI no longer depends on `npx wrangler` resolving the latest release at run time.

@@ -1,6 +1,6 @@
 # STRATUM Deploy Status
 
-Checked on 2026-07-20 UTC after GitHub Actions Node 24 migration verification.
+Checked on 2026-07-20 UTC after frontend CI app-runtime Node 24 verification.
 
 ## Backend
 
@@ -42,6 +42,7 @@ Current public runtime evidence:
 - Frontend GitHub repository: `theonlygeranium/edstratum-v2-frontend`
 - Latest frontend code-bearing manifest commit verified: `36f201f`
 - Frontend GitHub Actions action-migration commit verified: `d01ce68`;
+  frontend CI app-runtime migration commit verified: `f2c969b`;
   later report-only pushes can advance the manifest SHA while code-bearing asset
   hashes remain unchanged.
 - Current production metadata endpoint:
@@ -69,6 +70,10 @@ Current public runtime evidence:
 - GitHub Actions are now pinned to Node 24-native action majors in the frontend
   (`d01ce68`) and backend (`f7dced4`) workflows. Strict hosted-log searches
   found no deprecated Node.js 20 JavaScript-action warning after migration.
+- Frontend CI now installs Node 24 for the app checks at commit `f2c969b`.
+  Hosted run `29741097306` passed with `156` Playwright tests and confirmed
+  `node: v24.18.0`; local Node 24 QA also passed type-check, lint, build,
+  Wrangler `4.112.0` Pages Functions build, and full Playwright.
 - Live same-origin `/api/health` on `https://edstratumlabs.ai` proxies Railway
   and returns healthy status.
 - Live `/api/config` currently returns `ragEnabled: true`,
@@ -92,6 +97,6 @@ Current public runtime evidence:
 - Railway managed RAG provider activation is pending as described above.
 - Voice/TTS activation is pending Railway ElevenLabs credentials plus frontend
   and runtime feature flags.
-- A separate frontend app-runtime decision remains open: the workflow still
-  requests `node-version: '20'`, which is independent from the GitHub Actions
-  JavaScript runtime migration.
+- Wrangler is still invoked dynamically through `npx wrangler pages functions
+  build`; consider pinning it in the frontend repo for more deterministic
+  future CI runs.
