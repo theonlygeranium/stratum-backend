@@ -21,7 +21,7 @@ Earlier notes that the frontend source was missing are now superseded. The sourc
 - Current STRATUM chat asset: `/assets/StratumChat-Dc9NE68U.js`
 - Current PDF snapshot assets: `/assets/stratumPDF-Bgc_chGe.js`, `/assets/pdf-vendor-B7fMFYQc.js`
 - Backend: `https://stratum-backend-production-a340.up.railway.app`
-- Latest backend main source commit pushed: `bfb1987`
+- Latest backend main code-bearing source commit pushed: `41b2ae9`
 - Public backend health/runtime routes remain healthy after the source push; Railway runtime does not expose a git SHA, and Railway CLI auth was unavailable for deployment inspection.
 - Backend runtime previously verified: Writer/Palmyra generation, hash embeddings, Railway Postgres-backed graph/session state
 
@@ -78,6 +78,10 @@ Earlier notes that the frontend source was missing are now superseded. The sourc
   - Frontend commit `3904989` streams successful `/api/tts` responses through MediaSource/Web Audio when supported and retains buffered `arrayBuffer()` decode playback as a fallback.
   - Local frontend QA passed on 2026-07-20: `npm run type-check`, `npm run lint`, `npm run build`, `npx wrangler pages functions build`, focused voice browser tests (`16 passed`), and full Playwright suite (`122 passed`).
   - Hosted main CI `29731627328` passed with `122 passed`, Cloudflare Pages deployed `/assets/index-BQPzEWy3.js` and `/assets/StratumChat-Dc9NE68U.js`, live `/api/config` still returns `voiceEnabled: false`, and rendered production smoke verified zero voice controls plus zero TTS requests while disabled.
+- RAG provider path update:
+  - Backend commit `41b2ae9` adds modeled Pinecone settings, OpenAI/Pinecone provider plumbing through `StratumAgent` and `HybridRetriever`, direct Pinecone upsert/query support in `DenseVectorIndex`, Chroma/memory fallback on setup or query failure, and eval harness provider configuration.
+  - Local backend QA passed on 2026-07-20: focused config/vector/RAG/runtime tests (`65 passed, 1 skipped`), full pytest (`129 passed, 1 skipped`), RAG eval (`passed: true`, recall@10 `1.0`, groundedness proxy `1.0`), and `pip install --dry-run -r requirements.txt` resolved `pinecone-7.3.0`.
+  - Public Railway `/api/health` and `/api/runtime` remained healthy after the push. Runtime still reports `embedding_provider: "hash"` and `vector_store_provider: "chroma"` because production has not enabled the managed provider envs.
 
 ## Notes For Future Agents
 
@@ -98,6 +102,7 @@ Earlier notes that the frontend source was missing are now superseded. The sourc
 - Frontend commit `395d0b8` adds client-side PDF session snapshots, lazy-loaded PDF renderer chunks, and download UI after readiness completion or escalation.
 - Frontend commit `e1ff6d6` adds same-origin Cloudflare proxy routes for `/api/escalate` and `/api/tts`; backend commit `bfb1987` streams TTS provider bytes instead of buffering the complete provider response first.
 - Frontend commit `3904989` streams browser TTS playback through MediaSource where supported, with the buffered decode path retained for unsupported browsers.
+- Backend commit `41b2ae9` adds source-ready OpenAI embeddings plus Pinecone vector store plumbing with Chroma/memory fallback and local fake-SDK tests.
 
 ## Current SOT Blockers
 
@@ -105,7 +110,7 @@ Earlier notes that the frontend source was missing are now superseded. The sourc
 - Cloudflare KV rate limiting is not active in production. Live rapid `/api/config` probes did not produce HTTP 429, and the middleware skips enforcement until `RATE_LIMIT` is bound.
 - Cloudflare D1 conversation persistence is not active. `/api/config` returns `persistenceEnabled: false`, and `/api/sessions/.../messages` returns `503 d1_not_configured`.
 - Voice/TTS is not active in production. `/api/config` returns `voiceEnabled: false`, `/api/health` reports `tts.status: "unconfigured"`, and live `/api/tts` returns `503 tts_not_configured` for a valid validation-only payload.
-- Backend runtime reports `embedding_provider: "hash"` and `vector_store_provider: "chroma"`; this is healthy for current RAG behavior but does not prove a Pinecone/OpenAI production path.
+- Backend runtime reports `embedding_provider: "hash"` and `vector_store_provider: "chroma"`; the OpenAI/Pinecone path is now source-ready and locally tested, but production still needs Railway env activation before the managed provider path is live.
 - Wrangler and Railway CLI are unauthenticated in this shell, and no safe control-plane tokens are present, so Cloudflare bindings, Railway env vars, and exact deployment SHAs cannot be changed or verified from here.
 
 ## Completed Feature 1
@@ -160,7 +165,8 @@ Earlier notes that the frontend source was missing are now superseded. The sourc
 4. Create and bind Cloudflare KV namespaces `STRATUM_CONFIG` and `RATE_LIMIT` once credentials are available.
 5. Create D1 database `stratum-conversations`, run `schema.sql`, bind it as `STRATUM_DB`, add `SESSION_SECRET`, then set KV runtime `persistenceEnabled: true` only after a live smoke plan is ready.
 6. Configure voice/TTS only after a safe rollout plan: Railway `ELEVENLABS_API_KEY`, optional `ELEVENLABS_VOICE_ID`, Cloudflare Pages `VITE_TTS_ENABLED=true`, then KV runtime `voiceEnabled: true`.
-7. Add backend CI for pytest and contract tests, and keep frontend `CI / build-and-test` as a required GitHub status.
-8. Add a small public build manifest with git SHA, build timestamp, backend URL, and asset hashes for easier live verification.
-9. Prefer scoped Cloudflare deploy tokens over global credentials, and keep deploy credentials out of checked-in files.
-10. Add privacy-safe chatbot funnel analytics for open, first message, readiness completion, backend error, and handoff intent events.
+7. Activate managed RAG providers only after staging smoke: set Railway `EMBEDDING_PROVIDER=openai`, `VECTOR_STORE_PROVIDER=pinecone`, `PINECONE_API_KEY`, `PINECONE_INDEX`, optional `PINECONE_NAMESPACE`, then verify `/api/runtime` reports `openai`/`pinecone` and RAG eval remains above threshold.
+8. Add backend CI for pytest and contract tests, and keep frontend `CI / build-and-test` as a required GitHub status.
+9. Add a small public build manifest with git SHA, build timestamp, backend URL, and asset hashes for easier live verification.
+10. Prefer scoped Cloudflare deploy tokens over global credentials, and keep deploy credentials out of checked-in files.
+11. Add privacy-safe chatbot funnel analytics for open, first message, readiness completion, backend error, and handoff intent events.
