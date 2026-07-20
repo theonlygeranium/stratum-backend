@@ -16,7 +16,7 @@ BRANCH="${RAILWAY_BRANCH:-main}"
 ENVIRONMENT="${RAILWAY_ENVIRONMENT:-production}"
 
 export ALLOWED_ORIGINS="${ALLOWED_ORIGINS:-https://edstratumlabs.ai,https://www.edstratumlabs.ai,https://edstratumlabs.pages.dev,http://localhost:5173}"
-export JEFFREY_EMAIL="${JEFFREY_EMAIL:-jeffrey@edstratumlabs.ai}"
+export JEFFREY_EMAIL="${JEFFREY_EMAIL:-}"
 
 required_env=(OPENAI_API_KEY DATABASE_URL ALLOWED_ORIGINS RESEND_API_KEY JEFFREY_EMAIL)
 

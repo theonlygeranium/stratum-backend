@@ -21,7 +21,7 @@ Canvas usage and LMS workflow answers map toward Canvas Integration or LTI Devel
 
 ## Escalation Signals
 
-High-intent escalation is appropriate when the visitor has a near-term timeline, clear problem, institutional or product ownership, and a measurable pilot target. Confidence escalation is appropriate when retrieval cannot ground the answer in the knowledge base. Direct escalation is appropriate when the visitor asks to talk to Jeffrey, schedule a call, start a project, or get pricing.
+High-intent escalation is appropriate when the visitor has a near-term timeline, clear problem, institutional or product ownership, and a measurable pilot target. Confidence escalation is appropriate when retrieval cannot ground the answer in the knowledge base. Direct escalation is appropriate when the visitor asks to talk with the Founding leadership team, schedule a call, start a project, or get pricing.
 
 ## Snapshot Content
 

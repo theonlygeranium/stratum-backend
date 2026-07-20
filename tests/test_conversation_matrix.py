@@ -93,7 +93,7 @@ ABOUT_QUESTIONS = [
 ]
 
 ESCALATION_QUESTIONS = [
-    ("I want to start a project and talk to Jeffrey.", "explicit"),
+    ("I want to start a project and talk to the Founding leadership team.", "explicit"),
     ("Can I talk to a real person?", "explicit"),
     ("Please connect me with the founder.", "explicit"),
     ("How much does this cost?", "explicit"),

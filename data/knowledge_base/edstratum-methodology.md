@@ -42,7 +42,7 @@ The first release should be small enough to ship and evaluate, but real enough t
 
 ## How EdStratum Approaches a Project
 
-1. **Discovery call** — A focused conversation with Jeffrey to define the problem, assess data readiness, and identify the first workflow worth changing.
+1. **Discovery conversation** — A focused conversation with the Founding leadership team to define the problem, assess data readiness, and identify the first workflow worth changing.
 2. **Discovery audit** — A short engagement that maps the current platform, tests data trustworthiness, and defines the first release scope.
 3. **Pilot design** — A narrow workflow, bounded user population, baseline metric, and short feedback loop.
 4. **Implementation** — Production-grade engineering with logging, observability, and maintainable release patterns.

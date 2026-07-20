@@ -137,7 +137,7 @@ def build_chat_messages(
                 "Use the following context from the EdStratum knowledge base "
                 "to answer the visitor's question. If the context does not "
                 "contain enough information to answer confidently, say so and "
-                "offer to connect the visitor with Jeffrey.\n\n"
+                "offer to connect the visitor with EdStratum's Founding leadership team.\n\n"
                 "--- Retrieved Context ---\n"
                 f"{context}\n"
                 "--- End Context ---\n\n"

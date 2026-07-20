@@ -75,7 +75,7 @@ async def chat(request: ChatRequest, http_request: Request) -> StreamingResponse
                 ErrorEvent(
                     type="error",
                     message=(
-                        "STRATUM hit an internal error. Jeffrey should review the backend logs."
+                        "STRATUM hit an internal error. The EdStratum team should review the backend logs."
                     ),
                 )
             )

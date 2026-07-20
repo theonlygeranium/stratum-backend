@@ -37,7 +37,7 @@ Yes. EdStratum offers professional services across six core areas: Canvas LMS in
 
 ### What type of company is EdStratum?
 
-EdStratum Labs is a boutique, founder-led AI strategy and implementation consultancy. Jeffrey Geronimo, the founder, works directly with clients. There are no account managers, no automated sales sequences, and no handoffs to junior staff.
+EdStratum Labs is a boutique, founder-led AI strategy and implementation consultancy. The Founding leadership team works directly with clients. There are no account managers, no automated sales sequences, and no handoffs to junior staff.
 
 ### When is EdStratum a fit?
 

@@ -84,7 +84,7 @@ def test_runtime_reports_non_secret_operational_status() -> None:
         "llm_configured",
         "openai_api_key_configured",
         "resend_configured",
-        "jeffrey_email_configured",
+        "escalation_email_configured",
         "notifications_configured",
         "allowed_origins_env_configured",
     ]:
@@ -366,7 +366,7 @@ def test_explicit_escalation() -> None:
             "messages": [
                 {
                     "role": "user",
-                    "content": "I want to start a project and talk to Jeffrey.",
+                    "content": "I want to start a project and talk to the Founding leadership team.",
                     "timestamp": 0,
                 }
             ],
@@ -380,8 +380,11 @@ def test_explicit_escalation() -> None:
     assert events[-1]["type"] == "done"
     assert events[-1]["escalate"] == "explicit"
     text = "".join(event["token"] for event in events if event["type"] == "token")
-    assert "I've prepared a summary for Jeffrey" in text
-    assert "I've sent Jeffrey" not in text
+    assert "I've prepared a summary for the Founding leadership team" in text
+    assert "James from the Founding leadership team" not in text
+    assert "Jeffrey" not in text
+    assert "Calendly" not in text
+    assert "calendar" not in text.lower()
 
 
 def test_confirmed_escalation_notification_copy_says_sent(
@@ -396,7 +399,7 @@ def test_confirmed_escalation_notification_copy_says_sent(
             "messages": [
                 {
                     "role": "user",
-                    "content": "I want to start a project and talk to Jeffrey.",
+                    "content": "I want to start a project and talk to the Founding leadership team.",
                     "timestamp": 0,
                 }
             ],
@@ -409,8 +412,13 @@ def test_confirmed_escalation_notification_copy_says_sent(
 
     result = asyncio.run(main_module.agent.respond(request))
 
-    assert "I've sent Jeffrey a summary" in result.response_text
+    assert "I've sent the Founding leadership team a summary" in result.response_text
+    assert "James from the Founding leadership team will get back to you" in (
+        result.response_text
+    )
     assert "I've prepared a summary" not in result.response_text
+    assert "Jeffrey" not in result.response_text
+    assert "Calendly" not in result.response_text
 
 
 def test_eval_header_suppresses_escalation_notification(monkeypatch) -> None:
@@ -424,7 +432,7 @@ def test_eval_header_suppresses_escalation_notification(monkeypatch) -> None:
             "messages": [
                 {
                     "role": "user",
-                    "content": "I want to start a project and talk to Jeffrey.",
+                    "content": "I want to start a project and talk to the Founding leadership team.",
                     "timestamp": 0,
                 }
             ],
@@ -672,7 +680,7 @@ def test_direct_trigger_routes_without_losing_request_mode() -> None:
             "messages": [
                 {
                     "role": "user",
-                    "content": "I want to start a project and talk to Jeffrey.",
+                    "content": "I want to start a project and talk to the Founding leadership team.",
                     "timestamp": 0,
                 }
             ],
@@ -693,14 +701,14 @@ def test_direct_trigger_routes_without_losing_request_mode() -> None:
 @pytest.mark.parametrize(
     ("text", "expected"),
     [
-        ("I want to start a project and talk to Jeffrey.", "explicit"),
-        ("Please connect me with the founder.", "explicit"),
+        ("I want to start a project and talk to the Founding leadership team.", "explicit"),
+        ("Please connect me with the Founding leadership team.", "explicit"),
         ("How much does this cost?", "explicit"),
         ("Can I talk to a real person?", "explicit"),
         ("Can I talk to a human?", "sentiment"),
         ("This is useless.", "sentiment"),
         ("Is EdStratum founder-led?", None),
-        ("Who is Jeffrey and what is his methodology?", None),
+        ("Who is the Founding leadership team and what is the methodology?", None),
         ("What is the cost model for RAG evaluation?", None),
         ("How should pricing data feed an ROI model?", None),
     ],

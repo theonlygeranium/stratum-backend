@@ -120,7 +120,7 @@ def test_ai_adjacent_off_topic_query_stays_low_confidence() -> None:
 
 def test_contact_query_uses_contact_metadata() -> None:
     result = HybridRetriever(KB_DIR).retrieve(
-        "How do I schedule a discovery call with Jeffrey?",
+        "How do I request escalation to the Founding leadership team?",
         top_k=5,
     )
 

@@ -47,6 +47,10 @@ HYPE_PATTERNS = [
     "game-changing",
     "magic bullet",
 ]
+DISCRETION_PATTERNS = [
+    "jeffrey",
+    "calendly",
+]
 FABRICATION_PATTERNS = [
     "our standard pricing",
     "our hourly rate",
@@ -268,7 +272,10 @@ def _expected_check(
 
 def _persona_check(text: str) -> bool:
     lowered = text.lower()
-    return not any(pattern in lowered for pattern in HUMAN_CLAIM_PATTERNS + HYPE_PATTERNS)
+    return not any(
+        pattern in lowered
+        for pattern in HUMAN_CLAIM_PATTERNS + HYPE_PATTERNS + DISCRETION_PATTERNS
+    )
 
 
 def _hallucination_check(
@@ -281,7 +288,7 @@ def _hallucination_check(
         return False
     if scenario["name"] == "out-of-scope":
         return (
-            "jeffrey" in lowered
+            "founding leadership" in lowered
             or "scoped specifically" in lowered
             or "do not have" in lowered
             or "don't have" in lowered

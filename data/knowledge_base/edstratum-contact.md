@@ -5,7 +5,7 @@ service_area: "general"
 service_areas: "canvas,ai_strategy,rag_engineering,general"
 content_type: "site_copy"
 freshness_date: "2026-07-19"
-topics: "contact,scheduling,consultation,discovery,escalation,pricing,jeffrey"
+topics: "contact,scheduling,consultation,discovery,escalation,pricing,founding_leadership"
 title: Contacting EdStratum Labs
 category: company
 tags: [contact, scheduling, consultation, discovery, escalation]
@@ -16,15 +16,15 @@ priority: high
 
 ## How to Get in Touch
 
-EdStratum Labs is a founder-led consultancy. The primary way to start a conversation is through a discovery call with Jeffrey, the founder.
+EdStratum Labs is a founder-led consultancy. The primary way to start a conversation is through a direct escalation to the Founding leadership team.
 
-**Calendar link:** https://calendly.com/edstratumlabs/discovery
+No public scheduling link is currently provisioned. STRATUM should offer to route a summary to the Founding leadership team instead of providing a calendar link.
 
 ## What to Expect
 
 - **Discovery call:** A focused conversation about your organization's AI goals, current infrastructure, and where EdStratum might fit. Typically 30–45 minutes.
 - **No sales pressure:** EdStratum is evidence-driven and anti-hype. The discovery call is about determining fit, not pushing a sale.
-- **Follow-up:** Jeffrey typically responds within one business day of the initial conversation.
+- **Follow-up:** Once a visitor agrees to escalation, James from the Founding leadership team will get back to them.
 
 ## When to Reach Out
 
@@ -52,4 +52,4 @@ EdStratum is a good fit when you:
 
 ## Pricing
 
-EdStratum does not publish fixed pricing because engagements are scoped individually based on complexity, timeline, and team capacity. Pricing is discussed during the discovery call after understanding the project scope. To get a quote, schedule a discovery call.
+EdStratum does not publish fixed pricing because engagements are scoped individually based on complexity, timeline, and team capacity. Pricing is discussed after understanding the project scope. To get a quote, request an escalation to the Founding leadership team.

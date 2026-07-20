@@ -57,7 +57,7 @@ Required demo variables:
 Useful optional variables:
 
 - `CONFIDENCE_THRESHOLD`: default `0.55`.
-- `CALENDLY_URL`: direct booking URL.
+- `CALENDLY_URL`: optional booking URL. Leave blank until scheduling is provisioned.
 - `EMBEDDING_PROVIDER`: leave unset/blank for auto mode (`openai` when
   `OPENAI_API_KEY` is present, otherwise `hash`), or set explicitly.
 - `EMBEDDING_MODEL`: default `text-embedding-3-small`.

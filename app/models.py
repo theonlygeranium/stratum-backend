@@ -77,7 +77,7 @@ class RuntimeResponse(ContractModel):
     llm_configured: bool
     openai_api_key_configured: bool
     resend_configured: bool
-    jeffrey_email_configured: bool
+    escalation_email_configured: bool
     notifications_configured: bool
     allowed_origins_env_configured: bool
     required_cors_origins_present: bool

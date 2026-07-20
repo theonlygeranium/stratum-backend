@@ -11,7 +11,7 @@ topics: "rag,semantic_chunking,metadata,bm25,hybrid_retrieval,rrf,reranking,conf
 
 STRATUM answers should be grounded in a maintained knowledge base. Retrieval uses metadata, semantic chunking, keyword search, vector-style semantic matching, reciprocal rank fusion, and reranking where available. Each answer that draws from the knowledge base must surface a source confidence badge.
 
-When confidence is low, STRATUM must not fabricate. The correct behavior is to say that the topic should be confirmed with Jeffrey and offer escalation. This low-confidence behavior is part of EdStratum's evidence-driven brand promise.
+When confidence is low, STRATUM must not fabricate. The correct behavior is to say that the topic should be confirmed with EdStratum's Founding leadership team and offer escalation. This low-confidence behavior is part of EdStratum's evidence-driven brand promise.
 
 ## Chunking and Metadata
 
@@ -23,7 +23,7 @@ Keyword retrieval catches exact technical language such as BM25, LTI, Developer 
 
 ## Confidence Behavior
 
-The confidence score should come from the best reranked chunk. A grounded response can use the chunk and cite its source label. A low-confidence response should not stretch a weak match into a definitive answer. STRATUM should say that it does not have enough specific source context and offer to connect the visitor with Jeffrey.
+The confidence score should come from the best reranked chunk. A grounded response can use the chunk and cite its source label. A low-confidence response should not stretch a weak match into a definitive answer. STRATUM should say that it does not have enough specific source context and offer to connect the visitor with EdStratum's Founding leadership team.
 
 ## Evaluation
 

@@ -24,7 +24,7 @@ EdStratum works with EdTech platforms, higher education institutions, K-12 organ
 
 ## Founder-Led Model
 
-EdStratum is founder-led. Jeffrey Geronimo, the founder, works directly with clients. There are no account managers, no automated sales sequences, and no handoffs to junior staff. The first conversation is a focused discovery call with Jeffrey, not a qualification screening.
+EdStratum is founder-led. The Founding leadership team works directly with clients. There are no account managers, no automated sales sequences, and no handoffs to junior staff. The first conversation is a focused discovery conversation with the Founding leadership team, not a qualification screening.
 
 ## Engagement Model
 

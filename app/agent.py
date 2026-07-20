@@ -103,7 +103,7 @@ class StratumAgent:
             "llm_configured": bool(self.settings.llm_api_key),
             "openai_api_key_configured": bool(self.settings.openai_api_key),
             "resend_configured": bool(self.settings.resend_api_key),
-            "jeffrey_email_configured": bool(self.settings.jeffrey_email),
+            "escalation_email_configured": bool(self.settings.jeffrey_email),
             "notifications_configured": bool(
                 self.settings.resend_api_key and self.settings.jeffrey_email
             ),
@@ -294,8 +294,7 @@ class StratumAgent:
             async for event in self._stream_text(
                 f"{CONFIDENCE_ESCALATION_MESSAGE} I do not have a strong enough "
                 "source in the EdStratum knowledge base to answer that confidently. "
-                f"If you'd like to discuss this with Jeffrey, you can book a call here: "
-                f"{self.settings.calendly_url}"
+                "If you'd like, I can route this to the Founding leadership team."
             ):
                 yield event
             yield DoneEvent(type="done")
@@ -380,8 +379,7 @@ class StratumAgent:
                     response_text=(
                         f"{CONFIDENCE_ESCALATION_MESSAGE} I do not have a strong enough "
                         "source in the EdStratum knowledge base to answer that confidently. "
-                        f"If you'd like to discuss this with Jeffrey, you can book a call here: "
-                        f"{self.settings.calendly_url}"
+                        "If you'd like, I can route this to the Founding leadership team."
                     ),
                 )
             )
@@ -513,12 +511,12 @@ class StratumAgent:
         if trigger == "confidence":
             opener = (
                 "I do not have enough grounded context to answer that accurately, "
-                "so this is a good moment to bring Jeffrey in."
+                "so this is a good moment to bring in EdStratum's Founding leadership team."
             )
         elif trigger == "sentiment":
             opener = (
                 "I may not be meeting the need cleanly here, so I am going to route this "
-                "to Jeffrey with the context rather than keep guessing."
+                "to the Founding leadership team with the context rather than keep guessing."
             )
         elif trigger == "high_intent":
             opener = (
@@ -526,17 +524,22 @@ class StratumAgent:
                 "a focused EdStratum conversation."
             )
         else:
-            opener = "Absolutely. I can connect you with Jeffrey about the project."
+            opener = (
+                "Absolutely. I can connect you with EdStratum's Founding leadership team "
+                "about the project."
+            )
 
         notification_copy = (
             ESCALATION_SLA_MESSAGE
             if notification_sent
             else ESCALATION_PREPARED_MESSAGE
         )
-        return (
-            f"{opener}\n\n{notification_copy}\n\n"
-            f"In the meantime, here is his calendar: {self.settings.calendly_url}"
-        )
+        parts = [opener, notification_copy]
+        if self.settings.calendly_url:
+            parts.append(
+                f"You can also use this scheduling link: {self.settings.calendly_url}"
+            )
+        return "\n\n".join(parts)
 
     def _snapshot(self, request: ChatRequest) -> ReadinessSnapshot:
         answers = request.intake_answers
@@ -585,11 +588,7 @@ class StratumAgent:
             if msg.role in ("user", "assistant") and msg.content
         ]
 
-        # Inject the calendar URL into the system prompt so the LLM can
-        # provide it when visitors ask about scheduling or contacting Jeffrey.
-        system_prompt = RAG_SYSTEM_PROMPT.format(
-            calendar_url=self.settings.calendly_url
-        )
+        system_prompt = RAG_SYSTEM_PROMPT.format()
 
         llm_response = await generate_response(
             self.settings,
@@ -619,9 +618,7 @@ class StratumAgent:
             for msg in request.messages
             if msg.role in ("user", "assistant") and msg.content
         ]
-        system_prompt = RAG_SYSTEM_PROMPT.format(
-            calendar_url=self.settings.calendly_url
-        )
+        system_prompt = RAG_SYSTEM_PROMPT.format()
         async for token in stream_response(
             self.settings,
             system_prompt,

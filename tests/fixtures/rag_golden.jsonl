@@ -10,7 +10,7 @@
 {"name":"intake-high-intent","query":"How does STRATUM intake scoring decide high intent and readiness snapshots?","expected_content_type":"intake_logic","expected_source_title":"STRATUM Intake Scoring Logic","should_ground":true}
 {"name":"company-overview","query":"What does EdStratum Labs do?","expected_source_title":"EdStratum Labs Company Overview","should_ground":true}
 {"name":"founder-led","query":"Is EdStratum founder-led and what should visitors expect?","expected_source_title":"EdStratum Labs Company Overview","should_ground":true}
-{"name":"contact","query":"How do I schedule a discovery call with Jeffrey?","expected_source_title":"Contacting EdStratum Labs","should_ground":true}
+{"name":"contact","query":"How do I request escalation to the Founding leadership team?","expected_source_title":"Contacting EdStratum Labs","should_ground":true}
 {"name":"case-study-rag","query":"Do you have a pattern for a support workflow that needs grounded answers?","expected_content_type":"case_study","expected_source_title":"EdStratum Case Study Patterns","should_ground":true}
 {"name":"out-of-scope-travel","query":"Can AI recommend a backpacking route in Iceland?","should_ground":false}
 {"name":"layered-architecture","query":"How does EdStratum use layered architecture to scope an AI project?","expected_service_area":"ai_strategy","expected_content_type":"methodology","expected_source_title":"EdStratum Layered Architecture Methodology","should_ground":true}
