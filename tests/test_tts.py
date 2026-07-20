@@ -30,12 +30,12 @@ def test_tts_returns_503_when_provider_not_configured() -> None:
     assert response.json()["detail"] == "tts_not_configured"
 
 
-def test_tts_rejects_messages_over_500_characters() -> None:
+def test_tts_rejects_messages_over_2500_characters() -> None:
     object.__setattr__(main_module.settings, "elevenlabs_api_key", "test-key")
 
     response = client.post(
         "/api/tts",
-        json={"text": "x" * 501},
+        json={"text": "x" * 2501},
         headers={"X-Stratum-Session": "tts-too-long"},
     )
 

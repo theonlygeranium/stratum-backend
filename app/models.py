@@ -126,7 +126,7 @@ def healthy_response(*, rag_connected: bool, tts_configured: bool = False) -> He
 class TTSRequest(ContractModel):
     model_config = ConfigDict(extra="forbid", populate_by_name=True)
 
-    text: str = Field(min_length=1, max_length=500)
+    text: str = Field(min_length=1, max_length=2500)
     voice_id: str | None = Field(default=None, alias="voiceId")
 
 
