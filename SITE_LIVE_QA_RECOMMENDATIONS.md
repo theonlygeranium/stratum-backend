@@ -16,9 +16,9 @@ Earlier notes that the frontend source was missing are now superseded. The sourc
 - Site: `https://edstratumlabs.ai`
 - Cloudflare Pages project: `edstratumlabs`
 - Cloudflare source: GitHub repo `theonlygeranium/edstratum-v2-frontend`
-- Latest frontend production code commit verified: `3372b43`
-- Current production entry asset: `/assets/index-CAfNfkao.js`
-- Current STRATUM chat asset: `/assets/StratumChat-9GA-qGlc.js`
+- Latest frontend production code commit verified: `87c4d5d`
+- Current production entry asset: `/assets/index-CntR1RBA.js`
+- Current STRATUM chat asset: `/assets/StratumChat-CKo-w4OW.js`
 - Backend: `https://stratum-backend-production-a340.up.railway.app`
 - Latest backend main commit verified by public health/SSE behavior: `3272b67`
 - Backend runtime previously verified: Writer/Palmyra generation, hash embeddings, Railway Postgres-backed graph/session state
@@ -48,6 +48,10 @@ Earlier notes that the frontend source was missing are now superseded. The sourc
   - Local backend pytest passed with `119 passed, 1 skipped`.
   - Live `/api/chat` with `X-Stratum-Eval: true`, `escalationTrigger: "sentiment"`, and `sentimentSignal: "urgency"` returned terminal `done.escalate: "sentiment"` and `done.escalation.status: "suppressed"`.
   - Live frontend rendered urgency handoff UI through intercepted SSE only, so no live handoff email was sent.
+- D1 persistence scaffolding deployed:
+  - Live `https://edstratumlabs.ai/api/config` returns `persistenceEnabled: false`.
+  - Live `POST https://edstratumlabs.ai/api/sessions` returns `503` with `d1_not_configured` until D1 is bound.
+  - Live rendered chat smoke verified no `/api/sessions` requests are made while persistence is disabled.
 
 ## Notes For Future Agents
 
@@ -61,6 +65,7 @@ Earlier notes that the frontend source was missing are now superseded. The sourc
 - Production frontend currently reaches Railway through the source fallback if `VITE_STRATUM_API_URL` is missing at build time. Preview env vars were last verified as unset, so branch previews may use mock chat unless the backend URL is added to preview settings.
 - Frontend commit `371f634` also includes a production-host fallback to the public Railway backend if Cloudflare Pages production builds without `VITE_STRATUM_API_URL`; localhost and branch previews remain mock-mode by default.
 - Frontend commit `2f95db5` adds Cloudflare Pages Functions under `functions/`; `/api/health` proxies Railway `/api/health`, `/api/config` returns non-secret feature flags, and `_middleware.ts` applies best-effort KV rate limiting when `RATE_LIMIT` is bound.
+- Frontend commit `87c4d5d` adds D1 session persistence scaffolding under `functions/api/sessions/`, plus `schema.sql`; persistence remains inactive until `STRATUM_DB`, `SESSION_SECRET`, schema execution, and KV runtime `persistenceEnabled: true` are configured.
 - Backend commit `3272b67` accepts optional `escalationTrigger` and `sentimentSignal` on `/api/chat` requests, preserves them through the graph state, and records `sentiment_signal` in non-secret escalation key signals.
 
 ## Completed Feature 1
@@ -85,13 +90,21 @@ Earlier notes that the frontend source was missing are now superseded. The sourc
 - Local QA passed on 2026-07-20: frontend `npm run lint`, `npm run build`, `npm test -- tests/sentiment.spec.ts --reporter=list` (`10 passed`), frontend `npm test -- --reporter=list` (`64 passed`), backend `pytest` (`119 passed, 1 skipped`), and backend focused contract tests (`43 passed, 1 skipped`).
 - Production QA passed on 2026-07-20 using safe paths only: backend `X-Stratum-Eval: true` returned suppressed sentiment escalation, and frontend rendered urgency handoff with intercepted SSE so no live notification was sent.
 
+## Completed Feature 5
+
+- Enhancement spec Feature 5 is deployed on the frontend Cloudflare Pages project: D1 schema, typed session Function route, edge-signed scoped session tokens, local persistence helper, refresh hydration, and best-effort message/flag sync gated by `persistenceEnabled`.
+- Frontend commit `87c4d5d` is pushed to `main` and loaded in production as `/assets/StratumChat-CKo-w4OW.js`; backend code was not changed for this feature.
+- Local QA passed on 2026-07-20: frontend `npm run lint`, `npm run build`, `npx wrangler pages functions build`, focused Function tests (`22 passed`), persistence browser tests (`10 passed`), and full frontend suite (`84 passed`).
+- Production QA passed on 2026-07-20: `/api/config` returns `persistenceEnabled: false`, `/api/sessions` fails closed with `d1_not_configured`, and live rendered chat makes no session endpoint calls while persistence is disabled.
+
 ## Recommended Next Steps
 
 1. Add/verify Cloudflare preview env var `VITE_STRATUM_API_URL` if preview branches should exercise the live backend instead of mock chat.
 2. Keep frontend Playwright tests for homepage render, chatbot open, prompt submit, mobile layout, and discretion-safe copy.
 3. Keep using `X-Stratum-QA` or `X-Stratum-Eval` for any future live escalation QA unless the user explicitly requests an email test.
 4. Create and bind Cloudflare KV namespaces `STRATUM_CONFIG` and `RATE_LIMIT` once credentials are available.
-5. Add CI for `npm ci`, `npm run build`, and forbidden-copy scans.
-6. Add a small public build manifest with git SHA, build timestamp, backend URL, and asset hashes for easier live verification.
-7. Prefer scoped Cloudflare deploy tokens over global credentials, and keep deploy credentials out of checked-in files.
-8. Add privacy-safe chatbot funnel analytics for open, first message, readiness completion, backend error, and handoff intent events.
+5. Create D1 database `stratum-conversations`, run `schema.sql`, bind it as `STRATUM_DB`, add `SESSION_SECRET`, then set KV runtime `persistenceEnabled: true` only after a live smoke plan is ready.
+6. Add CI for `npm ci`, `npm run build`, and forbidden-copy scans.
+7. Add a small public build manifest with git SHA, build timestamp, backend URL, and asset hashes for easier live verification.
+8. Prefer scoped Cloudflare deploy tokens over global credentials, and keep deploy credentials out of checked-in files.
+9. Add privacy-safe chatbot funnel analytics for open, first message, readiness completion, backend error, and handoff intent events.
