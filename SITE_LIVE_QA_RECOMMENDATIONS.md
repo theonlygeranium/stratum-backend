@@ -16,13 +16,14 @@ Earlier notes that the frontend source was missing are now superseded. The sourc
 - Site: `https://edstratumlabs.ai`
 - Cloudflare Pages project: `edstratumlabs`
 - Cloudflare source: GitHub repo `theonlygeranium/edstratum-v2-frontend`
-- Latest frontend production code-bearing commit verified: `3904989`
+- Latest frontend production code-bearing commit verified: `c5f6431`
 - Current production entry asset: `/assets/index-BQPzEWy3.js`
 - Current STRATUM chat asset: `/assets/StratumChat-Dc9NE68U.js`
 - Current PDF snapshot assets: `/assets/stratumPDF-Bgc_chGe.js`, `/assets/pdf-vendor-B7fMFYQc.js`
+- Current public build manifest: `https://edstratumlabs.ai/build-manifest.json`
 - Backend: `https://stratum-backend-production-a340.up.railway.app`
 - Latest backend main code-bearing source commit pushed: `41b2ae9`
-- Latest backend CI/hardening commit pushed: `81d59bb`
+- Latest backend CI/hardening commit pushed: `3d6387a`
 - Public backend health/runtime routes remain healthy after the source push; Railway runtime does not expose a git SHA, and Railway CLI auth was unavailable for deployment inspection.
 - Backend runtime previously verified: Writer/Palmyra generation, hash embeddings, Railway Postgres-backed graph/session state
 
@@ -79,6 +80,10 @@ Earlier notes that the frontend source was missing are now superseded. The sourc
   - Frontend commit `3904989` streams successful `/api/tts` responses through MediaSource/Web Audio when supported and retains buffered `arrayBuffer()` decode playback as a fallback.
   - Local frontend QA passed on 2026-07-20: `npm run type-check`, `npm run lint`, `npm run build`, `npx wrangler pages functions build`, focused voice browser tests (`16 passed`), and full Playwright suite (`122 passed`).
   - Hosted main CI `29731627328` passed with `122 passed`, Cloudflare Pages deployed `/assets/index-BQPzEWy3.js` and `/assets/StratumChat-Dc9NE68U.js`, live `/api/config` still returns `voiceEnabled: false`, and rendered production smoke verified zero voice controls plus zero TTS requests while disabled.
+- Public build manifest update:
+  - Frontend commit `c5f6431` adds `/build-manifest.json` generation after `vite build`, a short-lived Cloudflare cache header, a CI dist assertion, and Playwright coverage for the manifest contract.
+  - Local frontend QA passed on 2026-07-20: `npm run type-check`, `npm run lint`, `npm run build`, `npx wrangler pages functions build`, focused STRATUM browser tests (`28 passed`), and full Playwright suite (`124 passed`).
+  - Hosted main CI `29733457960` passed with `124 passed`, Cloudflare Pages production succeeded, and live `/build-manifest.json` returned HTTP 200 with commit `c5f6431`, backend URL `https://stratum-backend-production-a340.up.railway.app`, 13 assets, and a matching live chat-asset SHA-256 hash.
 - RAG provider path update:
   - Backend commit `41b2ae9` adds modeled Pinecone settings, OpenAI/Pinecone provider plumbing through `StratumAgent` and `HybridRetriever`, direct Pinecone upsert/query support in `DenseVectorIndex`, Chroma/memory fallback on setup or query failure, and eval harness provider configuration.
   - Local backend QA passed on 2026-07-20: focused config/vector/RAG/runtime tests (`65 passed, 1 skipped`), full pytest (`129 passed, 1 skipped`), RAG eval (`passed: true`, recall@10 `1.0`, groundedness proxy `1.0`), and `pip install --dry-run -r requirements.txt` resolved `pinecone-7.3.0`.
@@ -87,6 +92,7 @@ Earlier notes that the frontend source was missing are now superseded. The sourc
   - Backend commit `81d59bb` adds GitHub Actions workflow `Backend CI` with Python 3.11 dependency install, full `pytest -q`, `scripts/eval_rag.py --json`, and custom commit status `Backend CI / pytest-and-rag`.
   - Hosted run `29732894534` passed on 2026-07-20; commit status `Backend CI / pytest-and-rag` returned `success`, and Railway posted a successful deployment status for `stratum-backend-production-a340.up.railway.app`.
   - Safe public post-push smoke passed: direct Railway `/api/health`, direct Railway `/api/runtime`, and Cloudflare same-origin `/api/health` all returned healthy responses. Runtime still reports `hash`/`chroma` until managed RAG env activation.
+  - Backend commit `3d6387a` hardens the RAG eval step with Bash `pipefail` and uploads `rag-eval-report.json` on every hosted run. Hosted run `29733841811` passed in 49 seconds, Railway deployment status returned `success`, and safe public post-push health/runtime smoke remained healthy.
 
 ## Notes For Future Agents
 
@@ -108,7 +114,8 @@ Earlier notes that the frontend source was missing are now superseded. The sourc
 - Frontend commit `e1ff6d6` adds same-origin Cloudflare proxy routes for `/api/escalate` and `/api/tts`; backend commit `bfb1987` streams TTS provider bytes instead of buffering the complete provider response first.
 - Frontend commit `3904989` streams browser TTS playback through MediaSource where supported, with the buffered decode path retained for unsupported browsers.
 - Backend commit `41b2ae9` adds source-ready OpenAI embeddings plus Pinecone vector store plumbing with Chroma/memory fallback and local fake-SDK tests.
-- Backend commit `81d59bb` adds the hosted backend CI gate and custom status context `Backend CI / pytest-and-rag`.
+- Frontend commit `c5f6431` adds public non-secret deployment metadata at `/build-manifest.json`.
+- Backend commit `3d6387a` adds the hosted backend CI gate hardening and keeps custom status context `Backend CI / pytest-and-rag`.
 
 ## Current SOT Blockers
 
@@ -117,6 +124,7 @@ Earlier notes that the frontend source was missing are now superseded. The sourc
 - Cloudflare D1 conversation persistence is not active. `/api/config` returns `persistenceEnabled: false`, and `/api/sessions/.../messages` returns `503 d1_not_configured`.
 - Voice/TTS is not active in production. `/api/config` returns `voiceEnabled: false`, `/api/health` reports `tts.status: "unconfigured"`, and live `/api/tts` returns `503 tts_not_configured` for a valid validation-only payload.
 - Backend runtime reports `embedding_provider: "hash"` and `vector_store_provider: "chroma"`; the OpenAI/Pinecone path is now source-ready and locally tested, but production still needs Railway env activation before the managed provider path is live.
+- Hosted frontend and backend CI currently emit GitHub annotations that some pinned GitHub Actions target deprecated Node.js 20 and are being forced to Node.js 24. Runs pass, but this should be monitored before the forced compatibility path changes.
 - Wrangler and Railway CLI are unauthenticated in this shell, and no safe control-plane tokens are present, so Cloudflare bindings, Railway env vars, and exact deployment SHAs cannot be changed or verified from here.
 
 ## Completed Feature 1
@@ -173,6 +181,7 @@ Earlier notes that the frontend source was missing are now superseded. The sourc
 6. Configure voice/TTS only after a safe rollout plan: Railway `ELEVENLABS_API_KEY`, optional `ELEVENLABS_VOICE_ID`, Cloudflare Pages `VITE_TTS_ENABLED=true`, then KV runtime `voiceEnabled: true`.
 7. Activate managed RAG providers only after staging smoke: set Railway `EMBEDDING_PROVIDER=openai`, `VECTOR_STORE_PROVIDER=pinecone`, `PINECONE_API_KEY`, `PINECONE_INDEX`, optional `PINECONE_NAMESPACE`, then verify `/api/runtime` reports `openai`/`pinecone` and RAG eval remains above threshold.
 8. Add branch protection for backend `main` requiring `Backend CI / pytest-and-rag`, and keep frontend `CI / build-and-test` required once GitHub plan controls allow it.
-9. Add a small public build manifest with git SHA, build timestamp, backend URL, and asset hashes for easier live verification.
+9. Use `/build-manifest.json` as the first frontend deploy verification check before deeper rendered QA.
 10. Prefer scoped Cloudflare deploy tokens over global credentials, and keep deploy credentials out of checked-in files.
 11. Add privacy-safe chatbot funnel analytics for open, first message, readiness completion, backend error, and handoff intent events.
+12. Upgrade or repin GitHub Actions once Node 24-native versions are available for the currently annotated actions.
