@@ -8,6 +8,8 @@ This pass covered the live Cloudflare Pages site, the live Railway backend, and 
 
 The React/Vite frontend source of truth was not present on this server. The live Pages artifact was already patched and deployed directly to Cloudflare Pages as an operational hotfix. Current production HTML now loads `/assets/index-DISC03.js`, which lazy-loads the discretion-safe STRATUM chat bundle `/assets/StratumChat-DISC03.js`.
 
+Cloudflare Pages source metadata was checked after this pass. The `edstratumlabs` Pages project has `source=null`, and the latest visible deployments are `ad_hoc` direct uploads with empty commit hashes. This confirms the Pages project is not connected to a Git source repository.
+
 ## Current Production State
 
 - Frontend: `https://edstratumlabs.ai`
@@ -77,6 +79,8 @@ No new production-blocking defects were found during this live QA pass.
 
 One operational risk remains: the deployed frontend fix is currently an artifact-level Cloudflare Pages hotfix because the actual React/Vite frontend source tree is not present on this server. Future frontend deploys from the original source could reintroduce the old STRATUM copy unless the source-of-truth repo is located and patched.
 
+Cloudflare does not appear to be able to reveal a hidden source repo for this project. The visible deployment history points to direct-upload deployments, so source recovery should proceed by either obtaining the original project from the human/operator or reconstructing it from `STRATUM_FRONTEND_CONTRACT.md` plus the live bundle.
+
 ## Recommendations
 
 1. Locate and patch the frontend source of truth.
@@ -120,6 +124,7 @@ One operational risk remains: the deployed frontend fix is currently an artifact
 9. Add a frontend source recovery note to future handoffs.
    - Other agents should know that `/home/z121532/edstratum-v2/stratum_backend` is backend-only.
    - The live frontend source should be recovered or cloned before future design or copy work.
+   - Cloudflare Pages metadata currently reports `source=null`, so do not assume a connected Git repo exists.
 
 10. Revisit the visual hierarchy after source is recovered.
     - The chat sidebar works well on mobile and desktop.
@@ -134,4 +139,3 @@ One operational risk remains: the deployed frontend fix is currently an artifact
 4. Build from source and confirm the generated bundle has no stale personal-name or Calendly strings.
 5. Deploy from source to Cloudflare Pages.
 6. Re-run the live QA commands summarized above.
-
