@@ -23,6 +23,11 @@ class SourceConfidence(ContractModel):
     grounded: bool
 
 
+class RagCitation(ContractModel):
+    source: str
+    excerpt: str = Field(min_length=1)
+
+
 class ReadinessSnapshot(ContractModel):
     situation: str
     capabilities: str
@@ -36,6 +41,7 @@ class ChatMessage(BaseModel):
     timestamp: float | int
     phases: list[ProcessingPhase] | None = None
     source: SourceConfidence | None = None
+    citations: list[RagCitation] | None = None
     isIntakeQuestion: bool | None = None
 
 
@@ -52,15 +58,31 @@ class ChatRequest(BaseModel):
 class StratumResult(ContractModel):
     phases: list[ProcessingPhase] = Field(min_length=1)
     source: SourceConfidence | None = None
+    citations: list[RagCitation] = Field(default_factory=list)
     response_text: str
     snapshot: ReadinessSnapshot | None = None
     escalate: EscalationTrigger = None
+
+
+class RagHealth(ContractModel):
+    status: Literal["ok", "degraded"]
+    vectorStoreConnected: bool
 
 
 class HealthResponse(ContractModel):
     status: Literal["healthy"] = "healthy"
     stratum: Literal["online"] = "online"
     backend_enabled: Literal[True] = True
+    rag: RagHealth
+
+
+def healthy_response(*, rag_connected: bool) -> HealthResponse:
+    return HealthResponse(
+        rag=RagHealth(
+            status="ok" if rag_connected else "degraded",
+            vectorStoreConnected=rag_connected,
+        )
+    )
 
 
 class RuntimeResponse(ContractModel):
@@ -102,6 +124,11 @@ class SourceEvent(ContractModel):
     source: SourceConfidence
 
 
+class CitationsEvent(ContractModel):
+    type: Literal["citations"]
+    data: list[RagCitation]
+
+
 class DoneEvent(ContractModel):
     type: Literal["done"]
     snapshot: ReadinessSnapshot | None = None
@@ -114,6 +141,6 @@ class ErrorEvent(ContractModel):
 
 
 StreamEvent: TypeAlias = Annotated[
-    PhaseEvent | TokenEvent | SourceEvent | DoneEvent | ErrorEvent,
+    PhaseEvent | TokenEvent | SourceEvent | CitationsEvent | DoneEvent | ErrorEvent,
     Field(discriminator="type"),
 ]

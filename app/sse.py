@@ -7,6 +7,7 @@ from collections.abc import Iterable
 from pydantic import TypeAdapter
 
 from app.models import (
+    CitationsEvent,
     DoneEvent,
     PhaseEvent,
     SourceEvent,
@@ -31,6 +32,8 @@ def stream_events(result: StratumResult) -> Iterable[StreamEvent]:
         yield SourceEvent(type="source", source=result.source)
     for token in token_chunks(result.response_text):
         yield TokenEvent(type="token", token=token)
+    if result.citations:
+        yield CitationsEvent(type="citations", data=result.citations)
     yield DoneEvent(type="done", snapshot=result.snapshot, escalate=result.escalate)
 
 

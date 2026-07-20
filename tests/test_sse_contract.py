@@ -61,6 +61,7 @@ def test_health() -> None:
         "status": "healthy",
         "stratum": "online",
         "backend_enabled": True,
+        "rag": {"status": "ok", "vectorStoreConnected": True},
     }
 
 
@@ -145,9 +146,15 @@ def test_open_mode_emits_required_sse_order() -> None:
     first_token_index = next(
         index for index, event in enumerate(events) if event["type"] == "token"
     )
+    citations_index = next(
+        index for index, event in enumerate(events) if event["type"] == "citations"
+    )
     assert all(event["type"] == "phase" for event in events[:3])
     assert events[3]["type"] == "source"
     assert first_token_index > 3
+    assert first_token_index < citations_index < len(events) - 1
+    assert events[citations_index]["data"]
+    assert set(events[citations_index]["data"][0]) == {"source", "excerpt"}
     assert events[-1]["type"] == "done"
     assert [event["type"] for event in events].count("done") == 1
     assert events[-1] == {"type": "done", "snapshot": None, "escalate": None}
@@ -665,6 +672,7 @@ def test_initial_graph_state_uses_api_contract_names() -> None:
     assert state["intake_index"] == 2
     assert state["intake_answers"] == {"org-type": "Higher Ed"}
     assert state["source_confidence"] is None
+    assert state["citations"] == []
     assert state["escalation_trigger"] is None
     assert state["snapshot"] is None
     assert state["session_id"] == "contract-graph"

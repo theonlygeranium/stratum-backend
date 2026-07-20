@@ -43,6 +43,12 @@ Earlier notes that the frontend source was missing are now superseded. The sourc
 - Pushing frontend `main` automatically deploys production; pushing frontend feature branches creates preview deployments.
 - Production Cloudflare env includes `VITE_STRATUM_API_URL`. Preview env vars were last verified as unset, so branch previews may use mock chat unless the backend URL is added to preview settings.
 
+## In-Flight Feature Branch
+
+- Branch `feat/rag-backend` is implementing the enhancement spec's RAG citation delta on the Python/FastAPI backend: `RagCitation`, `citations` SSE events before terminal `done`, citation extraction from retrieved KB chunks, graph checkpoint preservation, and RAG health in `/api/health`.
+- Local branch QA passed on 2026-07-20 with `./.venv/bin/pytest -q` (`112 passed, 1 skipped`).
+- This is not production evidence until the branch is merged/deployed and live QA confirms the Railway backend emits citations and the production frontend renders them.
+
 ## Recommended Next Steps
 
 1. Add/verify Cloudflare preview env var `VITE_STRATUM_API_URL` if preview branches should exercise the live backend instead of mock chat.

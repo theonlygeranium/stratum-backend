@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import re
 from collections.abc import AsyncGenerator
 from contextvars import ContextVar
 from typing import Any
@@ -25,8 +26,10 @@ from app.graph import (
 from app.llm import generate_response, stream_response
 from app.models import (
     ChatRequest,
+    CitationsEvent,
     DoneEvent,
     PhaseEvent,
+    RagCitation,
     ReadinessSnapshot,
     SourceConfidence,
     SourceEvent,
@@ -44,6 +47,7 @@ from app.prompts import (
     SCOPE_BOUNDARY_MESSAGE,
 )
 from app.rag import HybridRetriever
+from app.rag.documents import Document
 from app.session_store import SessionStore
 from app.sse import token_chunks
 
@@ -53,6 +57,7 @@ _SUPPRESS_NOTIFICATIONS: ContextVar[bool] = ContextVar(
     default=False,
 )
 GROUNDING_PREAMBLE = "Here is the grounded read: "
+CITATION_EXCERPT_LIMIT = 260
 
 
 class StratumAgent:
@@ -209,6 +214,7 @@ class StratumAgent:
 
                 source = SourceConfidence.model_validate(source_payload)
                 context = self._retrieved_context_text(update)
+                citations = self._citations_from_update(update)
                 query = last_user_text(request.messages)
 
                 yield PhaseEvent(type="phase", phase="searching")
@@ -238,9 +244,12 @@ class StratumAgent:
                     StratumResult(
                         phases=["searching", "retrieving", "composing"],
                         source=source,
+                        citations=citations,
                         response_text=response,
                     ),
                 )
+                if citations:
+                    yield CitationsEvent(type="citations", data=citations)
                 yield DoneEvent(type="done")
                 return
 
@@ -310,6 +319,7 @@ class StratumAgent:
         yield PhaseEvent(type="phase", phase="composing")
         yield SourceEvent(type="source", source=retrieval.source)
         context = "\n\n".join(doc.content for doc in retrieval.docs[:3])
+        citations = self._citations_from_docs(retrieval.docs[:3])
         yield TokenEvent(type="token", token=GROUNDING_PREAMBLE)
 
         streamed = False
@@ -327,6 +337,8 @@ class StratumAgent:
             async for event in self._stream_text(response):
                 yield event
 
+        if citations:
+            yield CitationsEvent(type="citations", data=citations)
         yield DoneEvent(type="done")
 
     async def _stream_result(
@@ -339,6 +351,8 @@ class StratumAgent:
             yield SourceEvent(type="source", source=result.source)
         async for event in self._stream_text(result.response_text):
             yield event
+        if result.citations:
+            yield CitationsEvent(type="citations", data=result.citations)
         yield DoneEvent(
             type="done",
             snapshot=result.snapshot,
@@ -395,6 +409,10 @@ class StratumAgent:
         return {
             "retrieved_context": [doc.content for doc in retrieval.docs[:3]],
             "source_confidence": retrieval.source.model_dump(mode="json"),
+            "citations": [
+                citation.model_dump(mode="json")
+                for citation in self._citations_from_docs(retrieval.docs[:3])
+            ],
             "response_text": "",
             "result": None,
         }
@@ -424,12 +442,36 @@ class StratumAgent:
         return StratumResult(
             phases=["searching", "retrieving", "composing"],
             source=source,
+            citations=self._citations_from_update(update),
             response_text=response,
         )
 
     @staticmethod
     def _retrieved_context_text(update: dict[str, Any]) -> str:
         return "\n\n".join(str(item) for item in update.get("retrieved_context") or [])
+
+    @staticmethod
+    def _citations_from_update(update: dict[str, Any]) -> list[RagCitation]:
+        citations: list[RagCitation] = []
+        for item in update.get("citations") or []:
+            try:
+                citations.append(RagCitation.model_validate(item))
+            except Exception:
+                continue
+        return citations
+
+    @staticmethod
+    def _citations_from_docs(docs: list[Document]) -> list[RagCitation]:
+        citations: list[RagCitation] = []
+        seen_sources: set[str] = set()
+        for doc in docs:
+            source = str(doc.metadata.get("source_title", "EdStratum Knowledge Base")).strip()
+            excerpt = _citation_excerpt(doc.content)
+            if not source or not excerpt or source in seen_sources:
+                continue
+            citations.append(RagCitation(source=source, excerpt=excerpt))
+            seen_sources.add(source)
+        return citations
 
     async def _intake(
         self,
@@ -726,3 +768,17 @@ class StratumAgent:
             "discovery",
         ]
         return not any(term in lowered for term in scope_terms)
+
+
+def _citation_excerpt(text: str) -> str:
+    cleaned = re.sub(r"^#{1,6}\s+", "", text, flags=re.MULTILINE)
+    cleaned = re.sub(r"\s+", " ", cleaned).strip()
+    if not cleaned:
+        return ""
+    if len(cleaned) <= CITATION_EXCERPT_LIMIT:
+        return cleaned
+
+    sentence_boundary = cleaned[:CITATION_EXCERPT_LIMIT].rsplit(".", 1)
+    if len(sentence_boundary) == 2 and len(sentence_boundary[0]) >= 80:
+        return f"{sentence_boundary[0]}."
+    return f"{cleaned[:CITATION_EXCERPT_LIMIT].rstrip()}..."

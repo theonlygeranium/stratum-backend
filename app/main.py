@@ -8,7 +8,7 @@ from fastapi.responses import StreamingResponse
 
 from app.agent import StratumAgent
 from app.config import get_settings
-from app.models import ChatRequest, ErrorEvent, HealthResponse, RuntimeResponse
+from app.models import ChatRequest, ErrorEvent, HealthResponse, RuntimeResponse, healthy_response
 from app.sse import sse_event
 
 settings = get_settings()
@@ -46,7 +46,7 @@ app.add_middleware(
 
 @app.get("/api/health", response_model=HealthResponse)
 async def health() -> HealthResponse:
-    return HealthResponse()
+    return healthy_response(rag_connected=bool(agent.retriever.docs))
 
 
 @app.get("/api/runtime", response_model=RuntimeResponse)
