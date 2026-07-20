@@ -16,7 +16,7 @@ Earlier notes that the frontend source was missing are now superseded. The sourc
 - Site: `https://edstratumlabs.ai`
 - Cloudflare Pages project: `edstratumlabs`
 - Cloudflare source: GitHub repo `theonlygeranium/edstratum-v2-frontend`
-- Latest frontend production code commit verified by live bundle: `371f634`
+- Latest frontend production code commit verified: `2f95db5`
 - Current production entry asset: `/assets/index-Bg_rGm5t.js`
 - Current STRATUM chat asset: `/assets/StratumChat-CXnpkHWz.js`
 - Backend: `https://stratum-backend-production-a340.up.railway.app`
@@ -40,6 +40,10 @@ Earlier notes that the frontend source was missing are now superseded. The sourc
   - Public `/api/escalate` with `X-Stratum-QA: true` returned `{ success: true, status: "suppressed", messageId: "qa-suppressed" }`.
   - Public `/api/chat` with `X-Stratum-Eval: true` returned terminal `done.escalation.status: "suppressed"` for an explicit escalation prompt.
   - Live frontend rendered success/failure confirmations using intercepted SSE only, so no live handoff email was sent.
+- Cloudflare Pages Functions middleware deployed:
+  - Live `https://edstratumlabs.ai/api/config` returned safe non-secret runtime defaults.
+  - Live `https://edstratumlabs.ai/api/health` proxied Railway `/api/health` and returned healthy RAG status.
+  - KV namespaces remain unbound until Cloudflare credentials are available, so rate limiting is currently skipped by design.
 
 ## Notes For Future Agents
 
@@ -52,6 +56,7 @@ Earlier notes that the frontend source was missing are now superseded. The sourc
 - Pushing frontend `main` automatically deploys production; pushing frontend feature branches creates preview deployments.
 - Production frontend currently reaches Railway through the source fallback if `VITE_STRATUM_API_URL` is missing at build time. Preview env vars were last verified as unset, so branch previews may use mock chat unless the backend URL is added to preview settings.
 - Frontend commit `371f634` also includes a production-host fallback to the public Railway backend if Cloudflare Pages production builds without `VITE_STRATUM_API_URL`; localhost and branch previews remain mock-mode by default.
+- Frontend commit `2f95db5` adds Cloudflare Pages Functions under `functions/`; `/api/health` proxies Railway `/api/health`, `/api/config` returns non-secret feature flags, and `_middleware.ts` applies best-effort KV rate limiting when `RATE_LIMIT` is bound.
 
 ## Completed Feature 1
 
@@ -63,12 +68,18 @@ Earlier notes that the frontend source was missing are now superseded. The sourc
 - Enhancement spec Feature 2 is deployed on the Python/FastAPI backend: structured `EscalationDelivery`, delivery metadata on terminal `done` SSE events, branded Resend HTML plus plaintext payloads, safe `/api/escalate`, session-scoped rate limiting, env aliases `ESCALATION_EMAIL_TO` / `ESCALATION_EMAIL_FROM`, and QA suppression for `X-Stratum-QA` and `X-Stratum-Eval`.
 - Local and production QA passed on 2026-07-20. Railway CLI auth was unavailable in the shell, so public health/runtime/SSE endpoints were used as deployment evidence.
 
+## Completed Feature 3
+
+- Enhancement spec Feature 3 is deployed on the frontend Cloudflare Pages project: typed Pages Functions, `/api/health` proxy, `/api/config` runtime flags, best-effort KV rate limiting, and handler tests.
+- Local, preview, and production QA passed on 2026-07-20. Wrangler was not authenticated, so KV namespace creation and dashboard binding remain pending.
+
 ## Recommended Next Steps
 
 1. Add/verify Cloudflare preview env var `VITE_STRATUM_API_URL` if preview branches should exercise the live backend instead of mock chat.
 2. Keep frontend Playwright tests for homepage render, chatbot open, prompt submit, mobile layout, and discretion-safe copy.
 3. Keep using `X-Stratum-QA` or `X-Stratum-Eval` for any future live escalation QA unless the user explicitly requests an email test.
-4. Add CI for `npm ci`, `npm run build`, and forbidden-copy scans.
-5. Add a small public build manifest with git SHA, build timestamp, backend URL, and asset hashes for easier live verification.
-6. Prefer scoped Cloudflare deploy tokens over global credentials, and keep deploy credentials out of checked-in files.
-7. Add privacy-safe chatbot funnel analytics for open, first message, readiness completion, backend error, and handoff intent events.
+4. Create and bind Cloudflare KV namespaces `STRATUM_CONFIG` and `RATE_LIMIT` once credentials are available.
+5. Add CI for `npm ci`, `npm run build`, and forbidden-copy scans.
+6. Add a small public build manifest with git SHA, build timestamp, backend URL, and asset hashes for easier live verification.
+7. Prefer scoped Cloudflare deploy tokens over global credentials, and keep deploy credentials out of checked-in files.
+8. Add privacy-safe chatbot funnel analytics for open, first message, readiness completion, backend error, and handoff intent events.
