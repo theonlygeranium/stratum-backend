@@ -38,6 +38,7 @@ class Settings:
     resend_from_email: str
     elevenlabs_api_key: str | None
     elevenlabs_voice_id: str
+    elevenlabs_base_url: str
 
 
 def get_settings() -> Settings:
@@ -82,6 +83,16 @@ def get_settings() -> Settings:
         llm_api_key = llm_api_key_override or openai_api_key
     else:
         llm_api_key = writer_api_key or llm_api_key_override
+
+    # ElevenLabs base URL — defaults to the US regional endpoint for lower
+    # latency, ported from Project-Tango where it was validated across six
+    # production personas. Can be overridden via ELEVENLABS_BASE_URL env var.
+    elevenlabs_base_url = os.getenv(
+        "ELEVENLABS_BASE_URL",
+        "https://api.us.elevenlabs.io/v1",
+    ).rstrip("/")
+    if not elevenlabs_base_url.endswith("/v1"):
+        elevenlabs_base_url = f"{elevenlabs_base_url}/v1"
 
     return Settings(
         allowed_origins=_split_csv(origins),
@@ -132,4 +143,5 @@ def get_settings() -> Settings:
             os.getenv("ELEVENLABS_VOICE_ID")
             or "JBFqnCBsd6RMkjVDRZzb"
         ),
+        elevenlabs_base_url=elevenlabs_base_url,
     )

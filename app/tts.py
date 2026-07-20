@@ -11,8 +11,26 @@ from fastapi import HTTPException
 from app.config import Settings
 from app.models import TTSRequest
 
-ELEVENLABS_TTS_URL = "https://api.elevenlabs.io/v1/text-to-speech/{voice_id}"
-ELEVENLABS_MODEL_ID = "eleven_multilingual_v2"
+# ElevenLabs model — eleven_flash_v2_5 is the lowest-latency model, ported from
+# Project-Tango where it was validated across six production personas. The
+# previous eleven_multilingual_v2 model adds ~200ms latency with no quality
+# benefit for English-only EdStratum responses.
+ELEVENLABS_MODEL_ID = "eleven_flash_v2_5"
+
+# Voice settings ported from Project-Tango's "general-info" persona, which
+# produced the most natural professional delivery. These values were
+# validated in production across hundreds of conversations.
+#   stability: 0.60 — moderate; allows natural expressiveness without drift
+#   similarity_boost: 0.80 — high; keeps the voice consistent
+#   style: 0.15 — slight; adds conversational naturalness
+#   use_speaker_boost: False — disabled across all Project-Tango personas
+ELEVENLABS_VOICE_SETTINGS = {
+    "stability": 0.60,
+    "similarity_boost": 0.80,
+    "style": 0.15,
+    "use_speaker_boost": False,
+}
+
 TTS_RATE_LIMIT = 10
 TTS_RATE_LIMIT_WINDOW_SECONDS = 60.0
 
@@ -47,7 +65,11 @@ async def synthesize_speech(
     if not voice_id:
         raise HTTPException(status_code=503, detail="tts_voice_not_configured")
 
-    url = ELEVENLABS_TTS_URL.format(voice_id=quote(voice_id, safe=""))
+    # Use the configurable base URL (defaults to the US regional endpoint for
+    # lower latency, ported from Project-Tango).
+    base_url = settings.elevenlabs_base_url.rstrip("/")
+    url = f"{base_url}/text-to-speech/{quote(voice_id, safe='')}"
+
     client = httpx.AsyncClient(timeout=30.0)
     upstream_request = client.build_request(
         "POST",
@@ -61,6 +83,7 @@ async def synthesize_speech(
         json={
             "text": request.text,
             "model_id": ELEVENLABS_MODEL_ID,
+            "voice_settings": ELEVENLABS_VOICE_SETTINGS,
         },
     )
 

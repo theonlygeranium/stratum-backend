@@ -3,7 +3,7 @@ from __future__ import annotations
 from fastapi.testclient import TestClient
 
 import app.main as main_module
-from app.tts import _TTS_REQUESTS
+from app.tts import _TTS_REQUESTS, ELEVENLABS_MODEL_ID, ELEVENLABS_VOICE_SETTINGS
 
 client = TestClient(main_module.app)
 
@@ -12,6 +12,11 @@ def setup_function() -> None:
     _TTS_REQUESTS.clear()
     object.__setattr__(main_module.settings, "elevenlabs_api_key", None)
     object.__setattr__(main_module.settings, "elevenlabs_voice_id", "default-voice")
+    object.__setattr__(
+        main_module.settings,
+        "elevenlabs_base_url",
+        "https://api.us.elevenlabs.io/v1",
+    )
 
 
 def test_tts_returns_503_when_provider_not_configured() -> None:
@@ -84,14 +89,23 @@ def test_tts_proxies_text_to_elevenlabs(monkeypatch) -> None:
     assert response.headers["content-type"] == "audio/mpeg"
     assert response.content == b"mp3-bytes"
     assert captured["method"] == "POST"
-    assert captured["url"].endswith("/v1/text-to-speech/voice-override")
+    # URL should use the US regional endpoint
+    assert captured["url"] == (
+        "https://api.us.elevenlabs.io/v1/text-to-speech/voice-override"
+    )
     assert captured["params"] == {"output_format": "mp3_44100_128"}
     assert captured["stream"] is True
     assert captured["headers"]["xi-api-key"] == "test-key"
     assert captured["headers"]["Accept"] == "audio/mpeg"
-    assert captured["json"] == {
-        "text": "Hello from STRATUM.",
-        "model_id": "eleven_multilingual_v2",
+    # Model should be eleven_flash_v2_5 (ported from Project-Tango)
+    assert captured["json"]["model_id"] == "eleven_flash_v2_5"
+    assert captured["json"]["text"] == "Hello from STRATUM."
+    # Voice settings should be included (ported from Project-Tango)
+    assert captured["json"]["voice_settings"] == {
+        "stability": 0.60,
+        "similarity_boost": 0.80,
+        "style": 0.15,
+        "use_speaker_boost": False,
     }
     assert captured["response_closed"] is True
     assert captured["client_closed"] is True
