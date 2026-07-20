@@ -96,7 +96,7 @@ Earlier notes that the frontend source was missing are now superseded. The sourc
 
 ## Current SOT Blockers
 
-- GitHub branch protection for frontend `main` is not configured to require `CI / build-and-test`; this is still a release-governance blocker.
+- GitHub branch protection for frontend `main` is not configured to require `CI / build-and-test`; this is still a release-governance blocker. A GitHub API attempt on 2026-07-20 returned HTTP 403 requiring GitHub Pro or a public repository before branch protection can be enabled.
 - Cloudflare KV rate limiting is not active in production. Live rapid `/api/config` probes did not produce HTTP 429, and the middleware skips enforcement until `RATE_LIMIT` is bound.
 - Cloudflare D1 conversation persistence is not active. `/api/config` returns `persistenceEnabled: false`, and `/api/sessions/.../messages` returns `503 d1_not_configured`.
 - Voice/TTS is not active in production. `/api/config` returns `voiceEnabled: false`, and `/api/health` reports `tts.status: "unconfigured"`.
