@@ -54,6 +54,10 @@ ESCALATION_SLA_MESSAGE = (
     "one business day."
 )
 
+ESCALATION_PREPARED_MESSAGE = (
+    "I've prepared a summary for Jeffrey so the handoff has the right context."
+)
+
 INTAKE_QUESTIONS = [
     {
         "id": "org-type",

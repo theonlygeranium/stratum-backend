@@ -1,16 +1,26 @@
 from __future__ import annotations
 
 from collections.abc import AsyncGenerator
+from contextvars import ContextVar
+from typing import Any
 
 from app.config import Settings
 from app.escalation import (
     build_payload,
     detect_high_intent,
-    detect_direct_trigger,
     last_user_text,
     send_or_log_escalation,
 )
-from app.graph import build_stratum_graph, procedural_fallback
+from app.graph import (
+    StratumState,
+    build_stratum_graph,
+    initial_state_from_request,
+    procedural_fallback,
+    request_from_state,
+    route_key,
+    route_node,
+    state_update_from_result,
+)
 from app.llm import generate_response, stream_response
 from app.models import (
     ChatRequest,
@@ -25,6 +35,7 @@ from app.models import (
 )
 from app.prompts import (
     CONFIDENCE_ESCALATION_MESSAGE,
+    ESCALATION_PREPARED_MESSAGE,
     ESCALATION_SLA_MESSAGE,
     HIGH_INTENT_ESCALATION_MESSAGE,
     INTAKE_QUESTIONS,
@@ -34,6 +45,12 @@ from app.prompts import (
 from app.rag import HybridRetriever
 from app.session_store import SessionStore
 from app.sse import token_chunks
+
+
+_SUPPRESS_NOTIFICATIONS: ContextVar[bool] = ContextVar(
+    "stratum_suppress_notifications",
+    default=False,
+)
 
 
 class StratumAgent:
@@ -55,22 +72,32 @@ class StratumAgent:
         self.low_confidence_counts = self.session_store.memory_counts
         self.graph_runtime = build_stratum_graph(
             database_url=settings.database_url,
-            open_handler=self._open,
+            open_handler=self._prepare_open,
             intake_handler=self._intake,
             about_handler=self._about,
             escalation_handler=self._escalate,
+            generate_handler=self._generate_open_from_state,
         )
 
-    async def respond(self, request: ChatRequest) -> StratumResult:
-        if self.graph_runtime is not None:
-            return await self.graph_runtime.respond(request)
-        return await procedural_fallback(
-            request,
-            open_handler=self._open,
-            intake_handler=self._intake,
-            about_handler=self._about,
-            escalation_handler=self._escalate,
-        )
+    async def respond(
+        self,
+        request: ChatRequest,
+        *,
+        suppress_notifications: bool = False,
+    ) -> StratumResult:
+        token = _SUPPRESS_NOTIFICATIONS.set(suppress_notifications)
+        try:
+            if self.graph_runtime is not None:
+                return await self.graph_runtime.respond(request)
+            return await procedural_fallback(
+                request,
+                open_handler=self._open,
+                intake_handler=self._intake,
+                about_handler=self._about,
+                escalation_handler=self._escalate,
+            )
+        finally:
+            _SUPPRESS_NOTIFICATIONS.reset(token)
 
     async def stream(
         self,
@@ -78,20 +105,13 @@ class StratumAgent:
         *,
         suppress_notifications: bool = False,
     ) -> AsyncGenerator[StreamEvent, None]:
-        query = last_user_text(request.messages)
-        direct_trigger = detect_direct_trigger(query)
-        if direct_trigger or request.mode == "escalation":
-            async for event in self._stream_escalation(
-                request,
-                direct_trigger or "explicit",
-                suppress_notifications=suppress_notifications,
-            ):
-                yield event
-            return
+        state = initial_state_from_request(request)
+        state.update(route_node(state))
+        mode = route_key(state)
 
-        if request.mode == "intake":
+        if mode != "open":
             async for event in self._stream_result(
-                await self._intake(
+                await self.respond(
                     request,
                     suppress_notifications=suppress_notifications,
                 )
@@ -99,18 +119,99 @@ class StratumAgent:
                 yield event
             return
 
-        if request.mode == "about":
-            async for event in self._stream_result(self._about()):
-                yield event
-            return
-
         async for event in self._stream_open(
-            request,
+            request_from_state(state),
             suppress_notifications=suppress_notifications,
         ):
             yield event
 
     async def _stream_open(
+        self,
+        request: ChatRequest,
+        *,
+        suppress_notifications: bool = False,
+    ) -> AsyncGenerator[StreamEvent, None]:
+        if self.graph_runtime is not None:
+            async for event in self._stream_open_graph(
+                request,
+                suppress_notifications=suppress_notifications,
+            ):
+                yield event
+            return
+
+        async for event in self._stream_open_direct(
+            request,
+            suppress_notifications=suppress_notifications,
+        ):
+            yield event
+
+    async def _stream_open_graph(
+        self,
+        request: ChatRequest,
+        *,
+        suppress_notifications: bool = False,
+    ) -> AsyncGenerator[StreamEvent, None]:
+        token = _SUPPRESS_NOTIFICATIONS.set(suppress_notifications)
+        try:
+            async for node_name, update in self.graph_runtime.stream_updates(
+                request,
+                interrupt_after=["open"],
+            ):
+                if node_name != "open":
+                    continue
+                result_payload = update.get("result")
+                if result_payload:
+                    async for event in self._stream_result(
+                        StratumResult.model_validate(result_payload)
+                    ):
+                        yield event
+                    return
+
+                source_payload = update.get("source_confidence")
+                if not source_payload:
+                    raise ValueError("STRATUM graph open node did not return a source")
+
+                source = SourceConfidence.model_validate(source_payload)
+                context = self._retrieved_context_text(update)
+                query = last_user_text(request.messages)
+
+                yield PhaseEvent(type="phase", phase="searching")
+                yield PhaseEvent(type="phase", phase="retrieving")
+                yield PhaseEvent(type="phase", phase="composing")
+                yield SourceEvent(type="source", source=source)
+
+                chunks: list[str] = []
+                async for chunk in self._stream_grounded_response(
+                    query,
+                    source,
+                    context,
+                    request,
+                ):
+                    chunks.append(chunk)
+                    yield TokenEvent(type="token", token=chunk)
+
+                response = "".join(chunks)
+                if not response:
+                    response = self._context_fallback(query, source, context)
+                    async for event in self._stream_text(response):
+                        yield event
+
+                await self.graph_runtime.checkpoint_result(
+                    request,
+                    StratumResult(
+                        phases=["searching", "retrieving", "composing"],
+                        source=source,
+                        response_text=response,
+                    ),
+                )
+                yield DoneEvent(type="done")
+                return
+
+            raise ValueError("STRATUM graph stream ended before open node")
+        finally:
+            _SUPPRESS_NOTIFICATIONS.reset(token)
+
+    async def _stream_open_direct(
         self,
         request: ChatRequest,
         *,
@@ -138,11 +239,20 @@ class StratumAgent:
             await self.session_store.set_low_confidence_count(request.session_id, count)
             if count >= 2:
                 yield PhaseEvent(type="phase", phase="escalating")
+                notification_sent = False
                 if not suppress_notifications:
-                    await self._notify_only(request, "confidence", None)
+                    notification_sent = await self._notify_only(
+                        request,
+                        "confidence",
+                        None,
+                    )
                 yield SourceEvent(type="source", source=retrieval.source)
                 async for event in self._stream_text(
-                    self._handoff_message(request, "confidence")
+                    self._handoff_message(
+                        request,
+                        "confidence",
+                        notification_sent=notification_sent,
+                    )
                 ):
                     yield event
                 yield DoneEvent(type="done", escalate="confidence")
@@ -182,20 +292,6 @@ class StratumAgent:
 
         yield DoneEvent(type="done")
 
-    async def _stream_escalation(
-        self,
-        request: ChatRequest,
-        trigger: str,
-        *,
-        suppress_notifications: bool = False,
-    ) -> AsyncGenerator[StreamEvent, None]:
-        yield PhaseEvent(type="phase", phase="escalating")
-        if not suppress_notifications:
-            await self._notify_only(request, trigger, None)
-        async for event in self._stream_text(self._handoff_message(request, trigger)):
-            yield event
-        yield DoneEvent(type="done", escalate=trigger)  # type: ignore[arg-type]
-
     async def _stream_result(
         self,
         result: StratumResult,
@@ -217,42 +313,87 @@ class StratumAgent:
             yield TokenEvent(type="token", token=token)
 
     async def _open(self, request: ChatRequest) -> StratumResult:
+        prepared = await self._prepare_open(request)
+        result_payload = prepared.get("result")
+        if result_payload:
+            return StratumResult.model_validate(result_payload)
+        return await self._generate_open_from_update(request, prepared)
+
+    async def _prepare_open(self, request: ChatRequest) -> dict[str, Any]:
         query = last_user_text(request.messages)
         if self._is_out_of_scope(query):
-            return StratumResult(
-                phases=["searching", "composing"],
-                response_text=SCOPE_BOUNDARY_MESSAGE,
-                source=SourceConfidence(label="", score=0.0, grounded=False),
+            return state_update_from_result(
+                StratumResult(
+                    phases=["searching", "composing"],
+                    response_text=SCOPE_BOUNDARY_MESSAGE,
+                    source=SourceConfidence(label="", score=0.0, grounded=False),
+                )
             )
 
         retrieval = self.retriever.retrieve(query)
         if not retrieval.source.grounded:
-            count = await self.session_store.get_low_confidence_count(request.session_id) + 1
+            count = (
+                await self.session_store.get_low_confidence_count(request.session_id)
+                + 1
+            )
             await self.session_store.set_low_confidence_count(request.session_id, count)
             if count >= 2:
                 result = await self._escalate(request, "confidence")
                 result.phases = ["searching", "retrieving", "escalating"]
                 result.source = retrieval.source
-                return result
-            return StratumResult(
-                phases=["searching", "retrieving", "composing"],
-                source=retrieval.source,
-                response_text=(
-                    f"{CONFIDENCE_ESCALATION_MESSAGE} I do not have a strong enough "
-                    "source in the EdStratum knowledge base to answer that confidently. "
-                    f"If you'd like to discuss this with Jeffrey, you can book a call here: "
-                    f"{self.settings.calendly_url}"
-                ),
+                return state_update_from_result(result)
+            return state_update_from_result(
+                StratumResult(
+                    phases=["searching", "retrieving", "composing"],
+                    source=retrieval.source,
+                    response_text=(
+                        f"{CONFIDENCE_ESCALATION_MESSAGE} I do not have a strong enough "
+                        "source in the EdStratum knowledge base to answer that confidently. "
+                        f"If you'd like to discuss this with Jeffrey, you can book a call here: "
+                        f"{self.settings.calendly_url}"
+                    ),
+                )
             )
 
         await self.session_store.set_low_confidence_count(request.session_id, 0)
-        context = "\n\n".join(doc.content for doc in retrieval.docs[:3])
-        response = await self._grounded_response(query, retrieval.source, context, request)
+        return {
+            "retrieved_context": [doc.content for doc in retrieval.docs[:3]],
+            "source_confidence": retrieval.source.model_dump(mode="json"),
+            "response_text": "",
+            "result": None,
+        }
+
+    async def _generate_open_from_state(
+        self,
+        state: StratumState,
+    ) -> StratumResult:
+        return await self._generate_open_from_update(request_from_state(state), state)
+
+    async def _generate_open_from_update(
+        self,
+        request: ChatRequest,
+        update: dict[str, Any],
+    ) -> StratumResult:
+        source_payload = update.get("source_confidence")
+        if not source_payload:
+            result_payload = update.get("result")
+            if result_payload:
+                return StratumResult.model_validate(result_payload)
+            raise ValueError("STRATUM open generation missing source confidence")
+
+        query = last_user_text(request.messages)
+        source = SourceConfidence.model_validate(source_payload)
+        context = self._retrieved_context_text(update)
+        response = await self._grounded_response(query, source, context, request)
         return StratumResult(
             phases=["searching", "retrieving", "composing"],
-            source=retrieval.source,
+            source=source,
             response_text=response,
         )
+
+    @staticmethod
+    def _retrieved_context_text(update: dict[str, Any]) -> str:
+        return "\n\n".join(str(item) for item in update.get("retrieved_context") or [])
 
     async def _intake(
         self,
@@ -273,7 +414,9 @@ class StratumAgent:
             trigger = "high_intent" if high_intent else None
             if high_intent:
                 response = f"{response}\n\n{HIGH_INTENT_ESCALATION_MESSAGE}"
-                if not suppress_notifications:
+                if not (
+                    suppress_notifications or _SUPPRESS_NOTIFICATIONS.get()
+                ):
                     await self._notify_only(request, "high_intent", snapshot)
             return StratumResult(
                 phases=["assessing", "composing"],
@@ -306,8 +449,14 @@ class StratumAgent:
         )
 
     async def _escalate(self, request: ChatRequest, trigger: str) -> StratumResult:
-        await self._notify_only(request, trigger, None)
-        message = self._handoff_message(request, trigger)
+        notification_sent = False
+        if not _SUPPRESS_NOTIFICATIONS.get():
+            notification_sent = await self._notify_only(request, trigger, None)
+        message = self._handoff_message(
+            request,
+            trigger,
+            notification_sent=notification_sent,
+        )
         return StratumResult(
             phases=["escalating"],
             response_text=message,
@@ -319,11 +468,17 @@ class StratumAgent:
         request: ChatRequest,
         trigger: str,
         snapshot: ReadinessSnapshot | None,
-    ) -> None:
+    ) -> bool:
         payload = build_payload(request, trigger, snapshot)
-        await send_or_log_escalation(self.settings, payload)
+        return await send_or_log_escalation(self.settings, payload)
 
-    def _handoff_message(self, request: ChatRequest, trigger: str) -> str:
+    def _handoff_message(
+        self,
+        request: ChatRequest,
+        trigger: str,
+        *,
+        notification_sent: bool,
+    ) -> str:
         if trigger == "confidence":
             opener = (
                 "I do not have enough grounded context to answer that accurately, "
@@ -342,8 +497,13 @@ class StratumAgent:
         else:
             opener = "Absolutely. I can connect you with Jeffrey about the project."
 
+        notification_copy = (
+            ESCALATION_SLA_MESSAGE
+            if notification_sent
+            else ESCALATION_PREPARED_MESSAGE
+        )
         return (
-            f"{opener}\n\n{ESCALATION_SLA_MESSAGE}\n\n"
+            f"{opener}\n\n{notification_copy}\n\n"
             f"In the meantime, here is his calendar: {self.settings.calendly_url}"
         )
 

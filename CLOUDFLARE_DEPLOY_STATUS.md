@@ -1,6 +1,6 @@
 # STRATUM Deploy Status
 
-Checked on 2026-07-19 after the Railway-backed STRATUM deployment.
+Checked on 2026-07-20 after the Railway-backed STRATUM deployment and graph-backed SSE refresh.
 
 ## Backend
 
@@ -22,9 +22,11 @@ Checked on 2026-07-19 after the Railway-backed STRATUM deployment.
 
 ## Verification
 
-- Backend test suite: `87 passed, 1 skipped, 2 warnings`
+- Backend test suite: `93 passed, 1 skipped, 2 warnings`
 - Optional Postgres checkpoint smoke: passed locally with `STRATUM_TEST_DATABASE_URL`.
-- RAG acceptance harness: passed locally with Recall@10 `1.0`, groundedness proxy `1.0`, and no-key first-token latency `6.35ms`.
+- RAG acceptance harness: passed locally with Recall@10 `1.0`, groundedness proxy `1.0`, retrieval p50 `1.54ms` / p95 `2.66ms`, and no-key first-token latency `10.72ms`.
+- `/api/chat` SSE now uses the compiled LangGraph runtime for direct escalation, intake, about, and open Q&A. Open Q&A streams the graph-prepared retrieval/source state before LLM tokens, then checkpoints the generated result through the graph `generate` node.
+- Escalation handoff copy is notification-status-aware: it says a summary was sent only when the Resend/log handoff succeeds, and otherwise says a summary was prepared.
 - Deployed Phase 4 conversation matrix: `54` live turns passed with contract pass rate `1.0`, expected behavior `1.0`, persona consistency `1.0`, no-hallucination proxy `1.0`, snapshot delivery `1.0`, scripted escalation rate `0.2222`, abandonment proxy `0.0`, and first-token latency p50 `33.23ms` / p95 `252.38ms`.
 - OpenAI-compatible provider streaming path: covered by parser and progressive-stream contract tests.
 - Docker build: passed with the Railway-compatible `${PORT:-8000}` command.
@@ -38,8 +40,11 @@ Checked on 2026-07-19 after the Railway-backed STRATUM deployment.
 ## Remaining Strict Spec Gaps
 
 - LangGraph routing now exposes the executable spec topology: `route`, `open`, `intake`, `assess`, `about`, `escalation`, `notify`, and shared terminal `generate`; optional PostgresSaver checkpoint support is implemented, but production checkpoint table creation still needs Railway runtime verification with `DATABASE_URL`.
-- Diagram-level `rag`, `persona`, and `handoff` stages remain consolidated into their branch handlers to preserve current behavior and avoid duplicate escalation notifications.
+- Diagram-level `rag`, `persona`, and `handoff` stages remain consolidated into branch handlers. Open-mode retrieval and generation are separated for SSE/checkpointing, but the graph still does not expose every diagram label as its own node.
 - Retrieval now uses `rank_bm25`, Chroma-backed dense retrieval, RRF-style fusion, heuristic reranking by default, and an optional Cohere cross-encoder reranker when `RERANKER_PROVIDER=cohere` plus `COHERE_API_KEY` are configured. The demo Railway env does not require Cohere.
+- Current RAG acceptance uses `15` local golden questions, below the strict `20+` representative-question target.
+- The default demo provider path still uses hash embeddings and heuristic reranking unless OpenAI/Cohere provider keys are configured.
+- Direct escalation trigger precision remains intentionally broad for demo UX and should be tightened against the final strict trigger list before declaring full spec completion.
 - Acceptance metrics now run locally through `scripts/eval_rag.py` and against Railway through `scripts/eval_deployed_conversations.py`; passive production traffic analytics for real visitor escalation and abandonment remain uninstrumented.
 
 ## Notes

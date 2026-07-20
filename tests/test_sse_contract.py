@@ -175,6 +175,140 @@ def test_agent_stream_reaches_source_before_llm_tokens(monkeypatch) -> None:
     ]
 
 
+def test_agent_stream_uses_graph_runtime_for_state_machine_modes(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    assert main_module.agent.graph_runtime is not None
+    calls = []
+
+    async def fake_graph_respond(request: ChatRequest) -> StratumResult:
+        calls.append(request.session_id)
+        return StratumResult(phases=["composing"], response_text="graph-backed")
+
+    monkeypatch.setattr(
+        main_module.agent.graph_runtime,
+        "respond",
+        fake_graph_respond,
+    )
+    request = ChatRequest.model_validate(
+        {
+            "messages": [
+                {
+                    "role": "user",
+                    "content": "What does an EdStratum engagement look like?",
+                    "timestamp": 0,
+                }
+            ],
+            "mode": "about",
+            "intakeIndex": None,
+            "intakeAnswers": {},
+            "sessionId": "contract-stream-graph-about",
+        }
+    )
+
+    async def collect() -> list[dict]:
+        return [
+            event.model_dump(mode="json")
+            async for event in main_module.agent.stream(request)
+        ]
+
+    events = asyncio.run(collect())
+
+    assert calls == ["contract-stream-graph-about"]
+    assert events[0] == {"type": "phase", "phase": "composing"}
+    assert events[-1] == {"type": "done", "snapshot": None, "escalate": None}
+    assert "graph-backed" == "".join(
+        event["token"] for event in events if event["type"] == "token"
+    )
+
+
+def test_agent_open_stream_uses_graph_updates_and_checkpoints_result(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    assert main_module.agent.graph_runtime is not None
+    calls = {"stream": [], "checkpoint": []}
+
+    async def fake_stream_updates(request: ChatRequest, *, interrupt_after=None):
+        calls["stream"].append((request.session_id, interrupt_after))
+        yield "route", {"mode": "open"}
+        yield "open", {
+            "retrieved_context": ["Graph-prepared Canvas context."],
+            "source_confidence": {
+                "label": "Graph Prepared Source",
+                "score": 0.97,
+                "grounded": True,
+            },
+            "response_text": "",
+            "result": None,
+        }
+
+    async def fake_checkpoint_result(
+        request: ChatRequest,
+        result: StratumResult,
+        *,
+        as_node: str = "generate",
+    ) -> None:
+        calls["checkpoint"].append((request.session_id, result.response_text, as_node))
+
+    async def fake_stream_grounded_response(*args, **kwargs):
+        yield "graph token"
+
+    monkeypatch.setattr(
+        main_module.agent.graph_runtime,
+        "stream_updates",
+        fake_stream_updates,
+    )
+    monkeypatch.setattr(
+        main_module.agent.graph_runtime,
+        "checkpoint_result",
+        fake_checkpoint_result,
+    )
+    monkeypatch.setattr(
+        main_module.agent,
+        "_stream_grounded_response",
+        fake_stream_grounded_response,
+    )
+    request = ChatRequest.model_validate(
+        {
+            "messages": [
+                {
+                    "role": "user",
+                    "content": "Does AI make sense for my Canvas environment?",
+                    "timestamp": 0,
+                }
+            ],
+            "mode": "open",
+            "intakeIndex": None,
+            "intakeAnswers": {},
+            "sessionId": "contract-open-graph-stream",
+        }
+    )
+
+    async def collect() -> list[dict]:
+        return [
+            event.model_dump(mode="json")
+            async for event in main_module.agent.stream(request)
+        ]
+
+    events = asyncio.run(collect())
+
+    assert calls["stream"] == [("contract-open-graph-stream", ["open"])]
+    assert calls["checkpoint"] == [
+        ("contract-open-graph-stream", "graph token", "generate")
+    ]
+    assert [event["type"] for event in events[:4]] == [
+        "phase",
+        "phase",
+        "phase",
+        "source",
+    ]
+    assert events[3]["source"]["label"] == "Graph Prepared Source"
+    assert "".join(event["token"] for event in events if event["type"] == "token") == (
+        "graph token"
+    )
+    assert events[-1] == {"type": "done", "snapshot": None, "escalate": None}
+
+
 def test_chat_stream_uses_sse_headers() -> None:
     response = client.post(
         "/api/chat",
@@ -217,6 +351,38 @@ def test_explicit_escalation() -> None:
     assert events[0] == {"type": "phase", "phase": "escalating"}
     assert events[-1]["type"] == "done"
     assert events[-1]["escalate"] == "explicit"
+    text = "".join(event["token"] for event in events if event["type"] == "token")
+    assert "I've prepared a summary for Jeffrey" in text
+    assert "I've sent Jeffrey" not in text
+
+
+def test_confirmed_escalation_notification_copy_says_sent(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def successful_notify(*args, **kwargs) -> bool:
+        return True
+
+    monkeypatch.setattr(main_module.agent, "_notify_only", successful_notify)
+    request = ChatRequest.model_validate(
+        {
+            "messages": [
+                {
+                    "role": "user",
+                    "content": "I want to start a project and talk to Jeffrey.",
+                    "timestamp": 0,
+                }
+            ],
+            "mode": "open",
+            "intakeIndex": None,
+            "intakeAnswers": {},
+            "sessionId": "contract-confirmed-notify-copy",
+        }
+    )
+
+    result = asyncio.run(main_module.agent.respond(request))
+
+    assert "I've sent Jeffrey a summary" in result.response_text
+    assert "I've prepared a summary" not in result.response_text
 
 
 def test_eval_header_suppresses_escalation_notification(monkeypatch) -> None:
@@ -247,6 +413,91 @@ def test_eval_header_suppresses_escalation_notification(monkeypatch) -> None:
     assert response.status_code == 200
     assert events[0] == {"type": "phase", "phase": "escalating"}
     assert events[-1]["escalate"] == "explicit"
+
+
+def test_eval_header_suppresses_high_intent_intake_notification(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def fail_notify(*args, **kwargs) -> None:
+        raise AssertionError("eval smoke tests must not send notifications")
+
+    monkeypatch.setattr(main_module.agent, "_notify_only", fail_notify)
+    response = client.post(
+        "/api/chat",
+        json={
+            "messages": [
+                {
+                    "role": "user",
+                    "content": "Success is a production pilot in one department.",
+                    "timestamp": 0,
+                }
+            ],
+            "mode": "intake",
+            "intakeIndex": 7,
+            "intakeAnswers": {
+                "org-type": "Higher Ed institution",
+                "canvas-usage": "Canvas is our core LMS",
+                "problem": "We want to automate advising triage",
+                "data-infra": "Developing",
+                "engineering": "Hybrid",
+                "timeline": "30-60 days",
+                "success": "A measurable pilot",
+            },
+            "sessionId": "contract-eval-high-intent-suppression",
+        },
+        headers={"X-Stratum-Eval": "true"},
+    )
+
+    events = _events(response.text)
+
+    assert response.status_code == 200
+    assert events[-1]["snapshot"]["situation"]
+    assert events[-1]["escalate"] == "high_intent"
+
+
+def test_eval_header_suppresses_confidence_escalation_notification(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def fail_notify(*args, **kwargs) -> None:
+        raise AssertionError("eval smoke tests must not send notifications")
+
+    retrieval = type(
+        "Retrieval",
+        (),
+        {
+            "docs": [],
+            "source": SourceConfidence(label="", score=0.0, grounded=False),
+        },
+    )()
+    monkeypatch.setattr(main_module.agent, "_notify_only", fail_notify)
+    monkeypatch.setattr(main_module.agent.retriever, "retrieve", lambda _: retrieval)
+    main_module.agent.low_confidence_counts["contract-eval-confidence"] = 1
+
+    response = client.post(
+        "/api/chat",
+        json={
+            "messages": [
+                {
+                    "role": "user",
+                    "content": "How does Canvas support orbital grade sync?",
+                    "timestamp": 0,
+                }
+            ],
+            "mode": "open",
+            "intakeIndex": None,
+            "intakeAnswers": {},
+            "sessionId": "contract-eval-confidence",
+        },
+        headers={"X-Stratum-Eval": "true"},
+    )
+
+    events = _events(response.text)
+
+    assert response.status_code == 200
+    assert events[-1]["escalate"] == "confidence"
+    assert "I've prepared a summary" in "".join(
+        event["token"] for event in events if event["type"] == "token"
+    )
 
 
 def test_frontend_mock_explicit_human_trigger() -> None:
@@ -499,6 +750,68 @@ def test_graph_runtime_lazily_compiles_checkpointer(monkeypatch: pytest.MonkeyPa
     assert result.response_text == "ok"
     assert runtime.compiled is not None
     assert runtime.checkpointer_name == "postgres"
+
+
+def test_graph_runtime_generates_open_result_after_prepared_context(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from langgraph.checkpoint.memory import MemorySaver
+
+    async def fake_make_checkpointer(database_url: str | None):
+        assert database_url is None
+        return MemorySaver(), "memory", None
+
+    calls = {"open": 0, "generate": 0}
+
+    async def open_handler(_: ChatRequest) -> dict:
+        calls["open"] += 1
+        return {
+            "retrieved_context": ["prepared context"],
+            "source_confidence": {
+                "label": "Prepared Source",
+                "score": 0.91,
+                "grounded": True,
+            },
+            "response_text": "",
+            "result": None,
+        }
+
+    async def generate_handler(state: dict) -> StratumResult:
+        calls["generate"] += 1
+        assert state["retrieved_context"] == ["prepared context"]
+        assert state["source_confidence"]["label"] == "Prepared Source"
+        return StratumResult(
+            phases=["searching", "retrieving", "composing"],
+            source=SourceConfidence.model_validate(state["source_confidence"]),
+            response_text="generated from prepared context",
+        )
+
+    monkeypatch.setattr("app.graph._make_checkpointer", fake_make_checkpointer)
+    runtime = build_stratum_graph(
+        database_url=None,
+        open_handler=open_handler,
+        intake_handler=lambda request: generate_handler({}),
+        about_handler=lambda: StratumResult(phases=["composing"], response_text="ok"),
+        escalation_handler=lambda request, trigger: generate_handler({}),
+        generate_handler=generate_handler,
+    )
+    assert runtime is not None
+
+    request = ChatRequest.model_validate(
+        {
+            "messages": [{"role": "user", "content": "Hello", "timestamp": 0}],
+            "mode": "open",
+            "intakeIndex": None,
+            "intakeAnswers": {},
+            "sessionId": "graph-generate-after-open",
+        }
+    )
+    result = asyncio.run(runtime.respond(request))
+
+    assert result.response_text == "generated from prepared context"
+    assert result.source is not None
+    assert result.source.label == "Prepared Source"
+    assert calls == {"open": 1, "generate": 1}
 
 
 def test_graph_adapter_nodes_preserve_single_handler_calls(

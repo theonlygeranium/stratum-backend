@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import asyncio
-from collections.abc import Awaitable, Callable
+from collections.abc import AsyncGenerator, Awaitable, Callable
 from contextlib import AbstractAsyncContextManager
 from dataclasses import dataclass, field
 from typing import Annotated, Any, TypedDict, cast
@@ -123,7 +123,7 @@ def route_node(state: StratumState) -> dict[str, Any]:
     return {"mode": route_key(state)}
 
 
-def _state_from_result(result: StratumResult) -> dict[str, Any]:
+def state_update_from_result(result: StratumResult) -> dict[str, Any]:
     return {
         "source_confidence": (
             result.source.model_dump(mode="json") if result.source else None
@@ -133,6 +133,12 @@ def _state_from_result(result: StratumResult) -> dict[str, Any]:
         "snapshot": result.snapshot.model_dump(mode="json") if result.snapshot else None,
         "result": result.model_dump(mode="json"),
     }
+
+
+def _node_update_from_result(result: StratumResult | dict[str, Any]) -> dict[str, Any]:
+    if isinstance(result, StratumResult):
+        return state_update_from_result(result)
+    return result
 
 
 @dataclass
@@ -148,9 +154,43 @@ class StratumGraphRuntime:
         compiled = await self._compiled_graph()
         final_state = await compiled.ainvoke(
             initial_state_from_request(request),
-            {"configurable": {"thread_id": request.session_id}},
+            self._config(request),
         )
         return result_from_state(cast(StratumState, final_state))
+
+    async def stream_updates(
+        self,
+        request: ChatRequest,
+        *,
+        interrupt_after: list[str] | None = None,
+    ) -> AsyncGenerator[tuple[str, dict[str, Any]], None]:
+        compiled = await self._compiled_graph()
+        async for update in compiled.astream(
+            initial_state_from_request(request),
+            self._config(request),
+            stream_mode="updates",
+            interrupt_after=interrupt_after,
+        ):
+            for node_name, node_update in update.items():
+                yield node_name, node_update
+
+    async def checkpoint_result(
+        self,
+        request: ChatRequest,
+        result: StratumResult,
+        *,
+        as_node: str = "generate",
+    ) -> None:
+        compiled = await self._compiled_graph()
+        await compiled.aupdate_state(
+            self._config(request),
+            state_update_from_result(result),
+            as_node=as_node,
+        )
+
+    @staticmethod
+    def _config(request: ChatRequest) -> dict[str, dict[str, str]]:
+        return {"configurable": {"thread_id": request.session_id}}
 
     async def _compiled_graph(self) -> Any:
         if self.compiled is not None:
@@ -194,29 +234,30 @@ async def procedural_fallback(
 def build_stratum_graph(
     *,
     database_url: str | None,
-    open_handler: Callable[[ChatRequest], Awaitable[StratumResult]],
+    open_handler: Callable[[ChatRequest], Awaitable[StratumResult | dict[str, Any]]],
     intake_handler: Callable[[ChatRequest], Awaitable[StratumResult]],
     about_handler: Callable[[], StratumResult],
     escalation_handler: Callable[[ChatRequest, str], Awaitable[StratumResult]],
+    generate_handler: Callable[[StratumState], Awaitable[StratumResult]] | None = None,
 ) -> StratumGraphRuntime | None:
     if StateGraph is None or MemorySaver is None:
         return None
 
     async def open_node(state: StratumState) -> dict[str, Any]:
-        return _state_from_result(await open_handler(request_from_state(state)))
+        return _node_update_from_result(await open_handler(request_from_state(state)))
 
     async def intake_node(state: StratumState) -> dict[str, Any]:
-        return _state_from_result(await intake_handler(request_from_state(state)))
+        return state_update_from_result(await intake_handler(request_from_state(state)))
 
     def assess_node(state: StratumState) -> dict[str, Any]:
         return {"snapshot": state.get("snapshot")}
 
     def about_node(_: StratumState) -> dict[str, Any]:
-        return _state_from_result(about_handler())
+        return state_update_from_result(about_handler())
 
     async def escalation_node(state: StratumState) -> dict[str, Any]:
         trigger = state.get("escalation_trigger") or "explicit"
-        return _state_from_result(
+        return state_update_from_result(
             await escalation_handler(request_from_state(state), trigger)
         )
 
@@ -228,7 +269,9 @@ def build_stratum_graph(
             }
         }
 
-    def generate_node(state: StratumState) -> dict[str, Any]:
+    async def generate_node(state: StratumState) -> dict[str, Any]:
+        if not state.get("result") and generate_handler is not None:
+            return state_update_from_result(await generate_handler(state))
         return {"response_text": state.get("response_text", "")}
 
     graph = StateGraph(StratumState)
