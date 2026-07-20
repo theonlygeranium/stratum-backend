@@ -1,6 +1,6 @@
 # STRATUM Deploy Status
 
-Checked on 2026-07-20 UTC after frontend live-smoke command deployment and production smoke.
+Checked on 2026-07-20 UTC after frontend rendered live-smoke command deployment and production smoke.
 
 ## Backend
 
@@ -43,17 +43,17 @@ Current public runtime evidence:
   `https://www.edstratumlabs.ai`
 - Frontend GitHub repository: `theonlygeranium/edstratum-v2-frontend`
 - Latest frontend production source/tooling commit verified locally and live:
-  `bb8f3b4`
+  `52cdf47`
 - Latest verified app code-bearing asset commit: `36f201f`; live-smoke
-  deployment manifest commit `bb8f3b4` left code-bearing asset hashes
-  unchanged.
+  deployment manifest commits `bb8f3b4` and `52cdf47` left code-bearing asset
+  hashes unchanged.
 - Frontend GitHub Actions action-migration commit verified: `d01ce68`;
   frontend CI app-runtime migration commit verified: `f2c969b`;
   CI Playwright server-ownership fix commit `84e01ce` is contained in current
-  frontend `main`; Wrangler pin commit `76b97ba` and live-smoke command commit
-  `bb8f3b4` are deployed but hosted CI proof is pending because GitHub Actions
-  run `29743225634` failed before starting any steps due to an account
-  billing/spending-limit blocker.
+  frontend `main`; Wrangler pin commit `76b97ba`, live-smoke command commit
+  `bb8f3b4`, and rendered live-smoke command commit `52cdf47` are deployed but
+  hosted CI proof is pending because GitHub Actions run `29744589386` failed
+  before starting any steps due to an account billing/spending-limit blocker.
 - Current production metadata endpoint:
   `https://edstratumlabs.ai/build-manifest.json`
 - The manifest intentionally exposes only non-secret deployment metadata:
@@ -101,7 +101,14 @@ Current public runtime evidence:
   unbound, direct Railway health/runtime, and forbidden-copy scans on root HTML
   plus the current STRATUM chat asset. Local and post-deploy smoke passed with
   `EXPECTED_MANIFEST_COMMIT=bb8f3b4`.
-- GitHub Actions run `29743225634` for `bb8f3b4` failed before starting any
+- Frontend commit `52cdf47` adds `npm run qa:live:rendered` for production
+  browser smoke: page identity, nonblank render, framework-overlay absence,
+  console/page/request diagnostics, forbidden-copy scans, desktop STRATUM chat
+  open, live non-escalation RAG response with expandable citations, hidden
+  voice controls while disabled, mobile dialog bounds, and screenshots under
+  `/tmp`. Local checks, Cloudflare Pages deployment, post-deploy `qa:live`, and
+  post-deploy `qa:live:rendered` all passed.
+- GitHub Actions run `29744589386` for `52cdf47` failed before starting any
   steps because of an account billing/spending-limit blocker; rerun hosted CI
   after billing/settings are corrected.
 - Live same-origin `/api/health` on `https://edstratumlabs.ai` proxies Railway
@@ -109,8 +116,8 @@ Current public runtime evidence:
 - Live `/api/config` currently returns `ragEnabled: true`,
   `voiceEnabled: false`, `persistenceEnabled: false`, and
   `maxIntakeQuestions: 6`.
-- Live build manifest after the live-smoke deploy returned HTTP 200 with
-  `Cache-Control: public, max-age=60, must-revalidate`, commit `bb8f3b4`, the
+- Live build manifest after the rendered live-smoke deploy returned HTTP 200 with
+  `Cache-Control: public, max-age=60, must-revalidate`, commit `52cdf47`, the
   Railway backend URL, 13 hashed assets, and unchanged code-bearing assets
   `/assets/index-Cld5-OrE.js`, `/assets/index-DH0EGGDC.css`, and
   `/assets/StratumChat-5iN0axbq.js`.
@@ -123,9 +130,9 @@ Current public runtime evidence:
   `CI / build-and-test` and backend `Backend CI / pytest-and-rag`; current
   account/repo controls previously returned a GitHub plan/permission blocker.
 - GitHub Actions currently has an account billing/spending-limit blocker for the
-  frontend repo; hosted CI for `bb8f3b4` and later pushes cannot be trusted
-  until the workflow can start and pass. Backend run `29743747239` for
-  `5793eee` reproduced the same billing/spending-limit annotation before any
+  frontend repo; hosted CI for `52cdf47` and later pushes cannot be trusted
+  until the workflow can start and pass. Backend run `29743994131` for
+  `221cf4b` reproduced the same billing/spending-limit annotation before any
   workflow steps started.
 - Cloudflare KV `STRATUM_CONFIG` and `RATE_LIMIT` bindings are not active in
   production.
