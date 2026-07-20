@@ -16,11 +16,11 @@ Earlier notes that the frontend source was missing are now superseded. The sourc
 - Site: `https://edstratumlabs.ai`
 - Cloudflare Pages project: `edstratumlabs`
 - Cloudflare source: GitHub repo `theonlygeranium/edstratum-v2-frontend`
-- Latest frontend production code commit verified: `2f95db5`
-- Current production entry asset: `/assets/index-Bg_rGm5t.js`
-- Current STRATUM chat asset: `/assets/StratumChat-CXnpkHWz.js`
+- Latest frontend production code commit verified: `3372b43`
+- Current production entry asset: `/assets/index-CAfNfkao.js`
+- Current STRATUM chat asset: `/assets/StratumChat-9GA-qGlc.js`
 - Backend: `https://stratum-backend-production-a340.up.railway.app`
-- Latest backend main commit verified by public health/SSE behavior: `ad1593b`
+- Latest backend main commit verified by public health/SSE behavior: `3272b67`
 - Backend runtime previously verified: Writer/Palmyra generation, hash embeddings, Railway Postgres-backed graph/session state
 
 ## QA Summary
@@ -44,6 +44,10 @@ Earlier notes that the frontend source was missing are now superseded. The sourc
   - Live `https://edstratumlabs.ai/api/config` returned safe non-secret runtime defaults.
   - Live `https://edstratumlabs.ai/api/health` proxied Railway `/api/health` and returned healthy RAG status.
   - KV namespaces remain unbound until Cloudflare credentials are available, so rate limiting is currently skipped by design.
+- Sentiment escalation enhancement deployed:
+  - Local backend pytest passed with `119 passed, 1 skipped`.
+  - Live `/api/chat` with `X-Stratum-Eval: true`, `escalationTrigger: "sentiment"`, and `sentimentSignal: "urgency"` returned terminal `done.escalate: "sentiment"` and `done.escalation.status: "suppressed"`.
+  - Live frontend rendered urgency handoff UI through intercepted SSE only, so no live handoff email was sent.
 
 ## Notes For Future Agents
 
@@ -57,6 +61,7 @@ Earlier notes that the frontend source was missing are now superseded. The sourc
 - Production frontend currently reaches Railway through the source fallback if `VITE_STRATUM_API_URL` is missing at build time. Preview env vars were last verified as unset, so branch previews may use mock chat unless the backend URL is added to preview settings.
 - Frontend commit `371f634` also includes a production-host fallback to the public Railway backend if Cloudflare Pages production builds without `VITE_STRATUM_API_URL`; localhost and branch previews remain mock-mode by default.
 - Frontend commit `2f95db5` adds Cloudflare Pages Functions under `functions/`; `/api/health` proxies Railway `/api/health`, `/api/config` returns non-secret feature flags, and `_middleware.ts` applies best-effort KV rate limiting when `RATE_LIMIT` is bound.
+- Backend commit `3272b67` accepts optional `escalationTrigger` and `sentimentSignal` on `/api/chat` requests, preserves them through the graph state, and records `sentiment_signal` in non-secret escalation key signals.
 
 ## Completed Feature 1
 
@@ -72,6 +77,13 @@ Earlier notes that the frontend source was missing are now superseded. The sourc
 
 - Enhancement spec Feature 3 is deployed on the frontend Cloudflare Pages project: typed Pages Functions, `/api/health` proxy, `/api/config` runtime flags, best-effort KV rate limiting, and handler tests.
 - Local, preview, and production QA passed on 2026-07-20. Wrangler was not authenticated, so KV namespace creation and dashboard binding remain pending.
+
+## Completed Feature 4
+
+- Enhancement spec Feature 4 is deployed across frontend and backend: frontend sentiment detection with frustration CTA and urgency auto-handoff, backend request metadata for `escalationTrigger` / `sentimentSignal`, and non-secret escalation payload logging of `sentiment_signal`.
+- Backend commit `3272b67` is pushed to `main`; frontend commit `3372b43` is pushed to `main` and loaded in production as `/assets/StratumChat-9GA-qGlc.js`.
+- Local QA passed on 2026-07-20: frontend `npm run lint`, `npm run build`, `npm test -- tests/sentiment.spec.ts --reporter=list` (`10 passed`), frontend `npm test -- --reporter=list` (`64 passed`), backend `pytest` (`119 passed, 1 skipped`), and backend focused contract tests (`43 passed, 1 skipped`).
+- Production QA passed on 2026-07-20 using safe paths only: backend `X-Stratum-Eval: true` returned suppressed sentiment escalation, and frontend rendered urgency handoff with intercepted SSE so no live notification was sent.
 
 ## Recommended Next Steps
 
