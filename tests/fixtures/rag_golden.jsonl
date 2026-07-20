@@ -13,3 +13,8 @@
 {"name":"contact","query":"How do I schedule a discovery call with Jeffrey?","expected_source_title":"Contacting EdStratum Labs","should_ground":true}
 {"name":"case-study-rag","query":"Do you have a pattern for a support workflow that needs grounded answers?","expected_content_type":"case_study","expected_source_title":"EdStratum Case Study Patterns","should_ground":true}
 {"name":"out-of-scope-travel","query":"Can AI recommend a backpacking route in Iceland?","should_ground":false}
+{"name":"layered-architecture","query":"How does EdStratum use layered architecture to scope an AI project?","expected_service_area":"ai_strategy","expected_content_type":"methodology","expected_source_title":"EdStratum Layered Architecture Methodology","should_ground":true}
+{"name":"learning-analytics","query":"Can EdStratum help turn Canvas or LMS activity data into early intervention signals?","expected_source_title":"EdStratum Services","should_ground":true}
+{"name":"workflow-automation","query":"What administrative workflows can EdStratum automate with AI?","expected_source_title":"EdStratum Services","should_ground":true}
+{"name":"fractional-ai-leadership","query":"When would fractional AI leadership or executive AI guidance be a good fit?","expected_source_title":"EdStratum Services","should_ground":true}
+{"name":"governance-baseline","query":"What should a responsible AI governance baseline define for a pilot?","expected_service_area":"ai_strategy","expected_content_type":"methodology","expected_source_title":"EdStratum AI Roadmap Framework","should_ground":true}
