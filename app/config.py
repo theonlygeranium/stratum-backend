@@ -24,8 +24,10 @@ class Settings:
     reranker_provider: str
     reranker_model: str
     openai_api_key: str | None
+    writer_api_key: str | None
     cohere_api_key: str | None
     llm_api_key: str | None
+    llm_provider: str
     llm_base_url: str
     llm_model: str
     resend_api_key: str | None
@@ -52,7 +54,29 @@ def get_settings() -> Settings:
         chroma_dir = root / chroma_dir
 
     openai_api_key = os.getenv("OPENAI_API_KEY") or None
+    writer_api_key = os.getenv("WRITER_API_KEY") or None
     cohere_api_key = os.getenv("COHERE_API_KEY") or None
+    llm_provider_env = os.getenv("LLM_PROVIDER")
+    llm_base_url_env = os.getenv("LLM_BASE_URL")
+    llm_provider = (
+        llm_provider_env
+        or (
+            "openai"
+            if llm_base_url_env and "api.openai.com" in llm_base_url_env
+            else "writer"
+        )
+    ).strip().lower()
+    if llm_base_url_env:
+        llm_base_url = llm_base_url_env
+    elif llm_provider == "openai":
+        llm_base_url = "https://api.openai.com/v1/chat/completions"
+    else:
+        llm_base_url = "https://api.writer.com/v1/chat/completions"
+    llm_api_key_override = os.getenv("LLM_API_KEY") or None
+    if llm_provider == "openai" or "api.openai.com" in llm_base_url:
+        llm_api_key = llm_api_key_override or openai_api_key
+    else:
+        llm_api_key = writer_api_key or llm_api_key_override
 
     return Settings(
         allowed_origins=_split_csv(origins),
@@ -61,10 +85,7 @@ def get_settings() -> Settings:
         knowledge_base_dir=kb_dir,
         escalation_log_dir=log_dir,
         database_url=os.getenv("DATABASE_URL") or None,
-        embedding_provider=(
-            os.getenv("EMBEDDING_PROVIDER")
-            or ("openai" if openai_api_key else "hash")
-        ),
+        embedding_provider=(os.getenv("EMBEDDING_PROVIDER") or "hash").strip().lower(),
         embedding_model=os.getenv("EMBEDDING_MODEL", "text-embedding-3-small"),
         vector_store_provider=os.getenv("VECTOR_STORE_PROVIDER", "chroma"),
         chroma_persist_dir=chroma_dir,
@@ -74,22 +95,17 @@ def get_settings() -> Settings:
         ),
         reranker_model=os.getenv("RERANKER_MODEL", "rerank-v4.0-fast"),
         openai_api_key=openai_api_key,
+        writer_api_key=writer_api_key,
         cohere_api_key=cohere_api_key,
-        # LLM provider — configurable via env vars.
-        # Defaults to OpenAI (api.openai.com / gpt-4o).
-        # Set LLM_API_KEY + LLM_BASE_URL + LLM_MODEL to swap to
-        # WRITER Palmyra or any OpenAI-compatible endpoint.
-        # Backward compat: OPENAI_API_KEY is still read if LLM_API_KEY
-        # is absent.
-        llm_api_key=(
-            os.getenv("LLM_API_KEY")
-            or openai_api_key
-            or None
+        # Generative LLM defaults to WRITER Palmyra. OPENAI_API_KEY is kept
+        # separate for embeddings unless OpenAI is explicitly selected.
+        llm_api_key=llm_api_key,
+        llm_provider=llm_provider,
+        llm_base_url=llm_base_url,
+        llm_model=os.getenv(
+            "LLM_MODEL",
+            "gpt-4o-mini" if llm_provider == "openai" else "palmyra-x5",
         ),
-        llm_base_url=os.getenv(
-            "LLM_BASE_URL", "https://api.openai.com/v1/chat/completions"
-        ),
-        llm_model=os.getenv("LLM_MODEL", "gpt-4o"),
         resend_api_key=os.getenv("RESEND_API_KEY") or None,
         jeffrey_email=os.getenv("JEFFREY_EMAIL") or None,
         resend_from_email=(

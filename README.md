@@ -48,7 +48,7 @@ Copy `.env.example` to `.env` for local development. The backend starts without 
 
 Required demo variables:
 
-- `OPENAI_API_KEY`: enables OpenAI-compatible generation and, when `EMBEDDING_PROVIDER=openai`, OpenAI embeddings.
+- `WRITER_API_KEY`: enables WRITER Palmyra chat generation. The default chat endpoint is `https://api.writer.com/v1/chat/completions` with model `palmyra-x5`.
 - `DATABASE_URL`: enables Postgres-backed session state and LangGraph checkpoint attempts.
 - `RESEND_API_KEY`: enables escalation emails.
 - `JEFFREY_EMAIL`: destination for escalation emails.
@@ -58,8 +58,13 @@ Useful optional variables:
 
 - `CONFIDENCE_THRESHOLD`: default `0.55`.
 - `CALENDLY_URL`: optional booking URL. Leave blank until scheduling is provisioned.
-- `EMBEDDING_PROVIDER`: leave unset/blank for auto mode (`openai` when
-  `OPENAI_API_KEY` is present, otherwise `hash`), or set explicitly.
+- `LLM_PROVIDER`: default `writer`. Set to `openai` only for an explicit OpenAI chat override.
+- `LLM_BASE_URL`: default `https://api.writer.com/v1/chat/completions`.
+- `LLM_MODEL`: default `palmyra-x5`.
+- `LLM_API_KEY`: optional generic generation key fallback. `WRITER_API_KEY` takes precedence for default Palmyra generation.
+- `OPENAI_API_KEY`: optional for OpenAI embeddings, or for chat only when `LLM_PROVIDER=openai` or `LLM_BASE_URL` points to OpenAI.
+- `EMBEDDING_PROVIDER`: default `hash`. Set to `openai` only when
+  `OPENAI_API_KEY` is separately configured for embeddings.
 - `EMBEDDING_MODEL`: default `text-embedding-3-small`.
 - `VECTOR_STORE_PROVIDER`: `chroma` by default, falling back to memory if Chroma is unavailable.
 - `CHROMA_PERSIST_DIR`: optional path for persistent local Chroma storage.

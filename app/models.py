@@ -75,6 +75,10 @@ class RuntimeResponse(ContractModel):
     reranker_provider: str
     reranker_model: str | None = None
     llm_configured: bool
+    llm_provider: str
+    llm_base_url: str
+    llm_model: str
+    writer_api_key_configured: bool
     openai_api_key_configured: bool
     resend_configured: bool
     escalation_email_configured: bool
