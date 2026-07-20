@@ -28,7 +28,7 @@ Checked on 2026-07-20 after the Railway-backed STRATUM deployment and graph-back
 - `/api/chat` SSE now uses the compiled LangGraph runtime for direct escalation, intake, about, and open Q&A. Open Q&A streams the graph-prepared retrieval/source state before LLM tokens, then checkpoints the generated result through the graph `generate` node.
 - Escalation handoff copy is notification-status-aware: it says a summary was sent only when the Resend/log handoff succeeds, and otherwise says a summary was prepared.
 - Direct escalation routing now uses phrase-level handoff requests rather than broad single-word triggers, with sentiment/frustration detection taking priority for documented frustration phrases.
-- Deployed Phase 4 conversation matrix: `54` live turns passed with contract pass rate `1.0`, expected behavior `1.0`, persona consistency `1.0`, no-hallucination proxy `1.0`, snapshot delivery `1.0`, scripted escalation rate `0.2222`, abandonment proxy `0.0`, and first-token latency p50 `53.98ms` / p95 `1184.77ms` / max `4872.71ms`.
+- Deployed Phase 4 conversation matrix: `54` live turns passed with contract pass rate `1.0`, expected behavior `1.0`, persona consistency `1.0`, no-hallucination proxy `1.0`, snapshot delivery `1.0`, scripted escalation rate `0.2037`, abandonment proxy `0.0`, and first-token latency p50 `43.47ms` / p95 `922.84ms` / max `2787.53ms`.
 - OpenAI-compatible provider streaming path: covered by parser and progressive-stream contract tests.
 - Docker build: passed with the Railway-compatible `${PORT:-8000}` command.
 - Secret/token scan: no matches in tracked backend source.
