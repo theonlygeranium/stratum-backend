@@ -16,9 +16,9 @@ Earlier notes that the frontend source was missing are now superseded. The sourc
 - Site: `https://edstratumlabs.ai`
 - Cloudflare Pages project: `edstratumlabs`
 - Cloudflare source: GitHub repo `theonlygeranium/edstratum-v2-frontend`
-- Latest frontend production source/tooling commit verified locally and live: `76b97ba`
-- Latest verified app code-bearing asset commit: `36f201f`; Wrangler pin deployment manifest commit `76b97ba` left the code-bearing asset hashes unchanged, and later report-only pushes can advance the manifest git SHA while leaving those hashes unchanged.
-- Frontend GitHub Actions action-migration commit verified: `d01ce68`; frontend CI app-runtime migration commit verified: `f2c969b`; Wrangler pin commit `76b97ba` is deployed but hosted CI proof is pending because GitHub Actions run `29742456851` failed before starting any steps due to an account billing/spending-limit blocker.
+- Latest frontend production source/tooling commit verified locally and live: `bb8f3b4`
+- Latest verified app code-bearing asset commit: `36f201f`; live-smoke deployment manifest commit `bb8f3b4` left the code-bearing asset hashes unchanged, and later report-only pushes can advance the manifest git SHA while leaving those hashes unchanged.
+- Frontend GitHub Actions action-migration commit verified: `d01ce68`; frontend CI app-runtime migration commit verified: `f2c969b`; CI Playwright server-ownership fix commit `84e01ce` is already contained in current `main`; Wrangler pin commit `76b97ba` and live-smoke command commit `bb8f3b4` are deployed, but hosted CI proof is pending because GitHub Actions run `29743225634` failed before starting any steps due to an account billing/spending-limit blocker.
 - Current production entry asset: `/assets/index-Cld5-OrE.js`
 - Current production stylesheet asset: `/assets/index-DH0EGGDC.css`
 - Current STRATUM chat asset: `/assets/StratumChat-5iN0axbq.js`
@@ -118,11 +118,17 @@ Earlier notes that the frontend source was missing are now superseded. The sourc
   - Backend commit `f7dced4` updates CI action pins to `actions/checkout@v5`, `actions/setup-python@v6`, `actions/upload-artifact@v6`, and `actions/github-script@v8` while leaving the backend Python runtime at `3.11`. Hosted backend CI run `29739391077` passed, GitHub status for `f7dced4` is `success`, Railway deployment status is `success`, and public Railway `/api/health` plus `/api/runtime` remained healthy.
 - Frontend CI app-runtime Node 24 update:
   - Frontend commit `f2c969b` updates hosted `actions/setup-node` `node-version` and the build-step `NODE_VERSION` marker from `20` to `24` while leaving frontend source output unchanged. Local Node 24 QA passed on 2026-07-20 with `node v24.18.0`, `npm ci`, `npm run type-check`, `npm run lint`, `npm run build`, Wrangler `4.112.0` Pages Functions build, and full Playwright with one worker (`156 passed`). Hosted main CI `29741097306` passed with `156 passed`; logs confirm `node-version: 24`, `node: v24.18.0`, and `wrangler 4.112.0`. Live `/build-manifest.json` returned commit `f2c969b` with unchanged code-bearing assets `/assets/index-Cld5-OrE.js`, `/assets/index-DH0EGGDC.css`, and `/assets/StratumChat-5iN0axbq.js`.
+  - CI Playwright server-ownership fix commit `84e01ce` is included in current frontend `main`. It removes the workflow-managed background preview server, relies on Playwright `webServer`, switches the mobile project to `Mobile Chrome`, keeps HTML artifacts for CI failures, and scopes brittle chat button locators inside the dialog.
 - Frontend Wrangler pin update:
   - Frontend commit `76b97ba` adds exact devDependency `wrangler@4.112.0`, switches hosted CI and guarded `deploy.sh` to `./node_modules/.bin/wrangler`, and adds a deploy-helper preflight that asks operators to run `npm ci` if the pinned binary is absent.
   - Local Node 24 QA passed on 2026-07-20 with `node v24.18.0`, `npm ci`, `bash -n deploy.sh`, guarded non-deploy smoke, `./node_modules/.bin/wrangler --version` returning `4.112.0`, `npm run type-check`, `npm run lint`, `npm run build`, `./node_modules/.bin/wrangler pages functions build`, and full Playwright with one worker (`156 passed`). The package-lock comparison found zero existing package version changes and only Wrangler's dependency tree added.
   - Cloudflare Pages deployment succeeded; live `/build-manifest.json` returned commit `76b97ba`, unchanged code-bearing assets `/assets/index-Cld5-OrE.js`, `/assets/index-DH0EGGDC.css`, `/assets/StratumChat-5iN0axbq.js`, 13 total assets, and `Cache-Control: public, max-age=60, must-revalidate`. Live `/api/config` remains `ragEnabled: true`, `voiceEnabled: false`, `persistenceEnabled: false`; live same-origin `/api/health` and direct Railway `/api/health` returned healthy RAG and unconfigured TTS status; direct Railway `/api/runtime` returned `graph_runtime: "langgraph"`, `embedding_provider: "hash"`, `vector_store_provider: "chroma"`, and `llm_provider: "writer"`. Live `/api/tts` returns `503 tts_disabled`, and live `/api/analytics` returns `503 analytics_not_configured`.
   - Hosted GitHub Actions run `29742456851` did not start any steps because of a GitHub account billing/spending-limit failure, so hosted runner proof for `76b97ba` is pending.
+- Frontend production live-smoke command update:
+  - Frontend commit `bb8f3b4` adds `npm run qa:live`, a cache-busted and optional `EXPECTED_MANIFEST_COMMIT` assertion for `/build-manifest.json`, forbidden-copy scans on root HTML plus the current STRATUM chat asset, same-origin `/api/config`, `/api/health`, `/api/tts`, `/api/analytics` checks, and direct Railway `/api/health` plus `/api/runtime` checks.
+  - Local QA passed on 2026-07-20 with `npm run lint`, Node 24 `npm run type-check`, `npm run build`, `./node_modules/.bin/wrangler pages functions build`, Node 24 `EXPECTED_MANIFEST_COMMIT=7bf0df6 npm run qa:live`, and post-deploy `EXPECTED_MANIFEST_COMMIT=bb8f3b4 npm run qa:live`.
+  - Cloudflare Pages deployment succeeded; live smoke verified manifest commit `bb8f3b4`, unchanged code-bearing assets `/assets/index-Cld5-OrE.js`, `/assets/index-DH0EGGDC.css`, `/assets/StratumChat-5iN0axbq.js`, `ragEnabled: true`, `voiceEnabled: false`, `persistenceEnabled: false`, same-origin and direct Railway healthy RAG, `tts_disabled` no-store, `analytics_not_configured` no-store, and direct runtime providers `hash` / `chroma` / `writer`.
+  - Hosted GitHub Actions run `29743225634` did not start any steps because of the GitHub billing/spending-limit blocker.
 
 ## Notes For Future Agents
 
@@ -152,11 +158,12 @@ Earlier notes that the frontend source was missing are now superseded. The sourc
 - Backend commit `728f217` keeps deploy helpers aligned with current runtime env names and makes optional managed RAG/TTS variables explicit without printing secret values.
 - Frontend commit `d01ce68` and backend commit `f7dced4` migrate GitHub Actions to Node 24-native action majors. Frontend commit `f2c969b` also moves the hosted frontend app CI runtime to Node 24; backend Python remains `3.11`.
 - Frontend commit `76b97ba` pins Wrangler as exact devDependency `4.112.0` and uses `./node_modules/.bin/wrangler` in CI and the guarded emergency deploy helper.
+- Frontend commit `bb8f3b4` adds the source-controlled `npm run qa:live` production smoke. Use `EXPECTED_MANIFEST_COMMIT=<short-sha>` after a frontend deploy to avoid accepting a stale manifest.
 
 ## Current SOT Blockers
 
 - GitHub branch protection for frontend `main` is not configured to require `CI / build-and-test`; this is still a release-governance blocker. A GitHub API attempt on 2026-07-20 returned HTTP 403 requiring GitHub Pro or a public repository before branch protection can be enabled.
-- GitHub Actions currently has an account billing/spending-limit blocker for the frontend repo: run `29742456851` for commit `76b97ba` failed before starting any workflow steps. Hosted CI proof for `76b97ba` and later report-only pushes is pending until billing/settings are corrected and the workflow is rerun.
+- GitHub Actions currently has an account billing/spending-limit blocker for the frontend repo: run `29743225634` for commit `bb8f3b4` failed before starting any workflow steps. Backend rerun `29742747274` reproduced the same billing/spending-limit annotation. Hosted CI proof for `bb8f3b4` and later pushes is pending until billing/settings are corrected and the workflows are rerun.
 - Cloudflare KV rate limiting is not active in production. Live rapid `/api/config` probes did not produce HTTP 429, and the middleware skips enforcement until `RATE_LIMIT` is bound.
 - Cloudflare analytics aggregation is not active in production. Live `/api/analytics` returns `503 analytics_not_configured` until `ANALYTICS_EVENTS` is bound.
 - Cloudflare D1 conversation persistence is not active. `/api/config` returns `persistenceEnabled: false`, and `/api/sessions/.../messages` returns `503 d1_not_configured`.
@@ -217,8 +224,8 @@ Earlier notes that the frontend source was missing are now superseded. The sourc
 5. Create D1 database `stratum-conversations`, run `schema.sql`, bind it as `STRATUM_DB`, add `SESSION_SECRET`, choose an operational purge cadence using `/api/sessions/purge`, then set KV runtime `persistenceEnabled: true` only after a live smoke plan is ready.
 6. Configure voice/TTS only after a safe rollout plan: set Railway `ELEVENLABS_API_KEY`, optional `ELEVENLABS_VOICE_ID`, Cloudflare Pages `VITE_TTS_ENABLED=true`, then KV runtime `voiceEnabled: true`.
 7. Activate managed RAG providers only after staging smoke: set Railway `EMBEDDING_PROVIDER=openai`, `VECTOR_STORE_PROVIDER=pinecone`, `PINECONE_API_KEY`, `PINECONE_INDEX`, optional `PINECONE_NAMESPACE`, then verify `/api/runtime` reports `openai`/`pinecone` and RAG eval remains above threshold.
-8. Resolve the GitHub Actions account billing/spending-limit blocker, then rerun frontend `CI / build-and-test` for `76b97ba` and the latest report-only commit.
+8. Resolve the GitHub Actions account billing/spending-limit blocker, then rerun frontend `CI / build-and-test` for `bb8f3b4` or the latest frontend commit, plus backend `Backend CI / pytest-and-rag` for the latest backend commit.
 9. Add branch protection for backend `main` requiring `Backend CI / pytest-and-rag`, and keep frontend `CI / build-and-test` required once GitHub plan controls allow it.
-10. Use `/build-manifest.json` as the first frontend deploy verification check before deeper rendered QA.
+10. Use `EXPECTED_MANIFEST_COMMIT=<short-sha> npm run qa:live` as the first frontend deploy verification check before deeper rendered QA.
 11. Prefer scoped Cloudflare deploy tokens over global credentials, and keep deploy credentials out of checked-in files.
 12. Bind Cloudflare KV namespace `ANALYTICS_EVENTS` to activate the source-ready aggregate chatbot analytics counters, then verify `/api/analytics` returns `202` for an allowlisted test event.

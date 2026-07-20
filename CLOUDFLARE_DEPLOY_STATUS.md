@@ -1,6 +1,6 @@
 # STRATUM Deploy Status
 
-Checked on 2026-07-20 UTC after frontend Wrangler pin deployment and live smoke.
+Checked on 2026-07-20 UTC after frontend live-smoke command deployment and production smoke.
 
 ## Backend
 
@@ -40,15 +40,18 @@ Current public runtime evidence:
 - Production aliases: `https://edstratumlabs.ai`,
   `https://www.edstratumlabs.ai`
 - Frontend GitHub repository: `theonlygeranium/edstratum-v2-frontend`
-- Latest frontend production source/tooling commit verified locally and live: `76b97ba`
-- Latest verified app code-bearing asset commit: `36f201f`; Wrangler pin
-  deployment manifest commit `76b97ba` left code-bearing asset hashes
+- Latest frontend production source/tooling commit verified locally and live:
+  `bb8f3b4`
+- Latest verified app code-bearing asset commit: `36f201f`; live-smoke
+  deployment manifest commit `bb8f3b4` left code-bearing asset hashes
   unchanged.
 - Frontend GitHub Actions action-migration commit verified: `d01ce68`;
   frontend CI app-runtime migration commit verified: `f2c969b`;
-  Wrangler pin commit `76b97ba` is deployed but hosted CI proof is pending
-  because GitHub Actions run `29742456851` failed before starting any steps due
-  to an account billing/spending-limit blocker.
+  CI Playwright server-ownership fix commit `84e01ce` is contained in current
+  frontend `main`; Wrangler pin commit `76b97ba` and live-smoke command commit
+  `bb8f3b4` are deployed but hosted CI proof is pending because GitHub Actions
+  run `29743225634` failed before starting any steps due to an account
+  billing/spending-limit blocker.
 - Current production metadata endpoint:
   `https://edstratumlabs.ai/build-manifest.json`
 - The manifest intentionally exposes only non-secret deployment metadata:
@@ -83,7 +86,13 @@ Current public runtime evidence:
   passed `npm ci`, `bash -n deploy.sh`, the guarded non-deploy helper smoke,
   pinned Wrangler version check, type-check, lint, production build, pinned
   Pages Functions build, and full Playwright (`156 passed`).
-- GitHub Actions run `29742456851` for `76b97ba` failed before starting any
+- Frontend commit `bb8f3b4` adds `npm run qa:live` for safe production smoke:
+  cache-busted manifest commit assertion, runtime config, same-origin health,
+  disabled TTS fail-closed behavior, analytics fail-closed behavior while KV is
+  unbound, direct Railway health/runtime, and forbidden-copy scans on root HTML
+  plus the current STRATUM chat asset. Local and post-deploy smoke passed with
+  `EXPECTED_MANIFEST_COMMIT=bb8f3b4`.
+- GitHub Actions run `29743225634` for `bb8f3b4` failed before starting any
   steps because of an account billing/spending-limit blocker; rerun hosted CI
   after billing/settings are corrected.
 - Live same-origin `/api/health` on `https://edstratumlabs.ai` proxies Railway
@@ -91,8 +100,8 @@ Current public runtime evidence:
 - Live `/api/config` currently returns `ragEnabled: true`,
   `voiceEnabled: false`, `persistenceEnabled: false`, and
   `maxIntakeQuestions: 6`.
-- Live build manifest after the Wrangler pin deploy returned HTTP 200 with
-  `Cache-Control: public, max-age=60, must-revalidate`, commit `76b97ba`, the
+- Live build manifest after the live-smoke deploy returned HTTP 200 with
+  `Cache-Control: public, max-age=60, must-revalidate`, commit `bb8f3b4`, the
   Railway backend URL, 13 hashed assets, and unchanged code-bearing assets
   `/assets/index-Cld5-OrE.js`, `/assets/index-DH0EGGDC.css`, and
   `/assets/StratumChat-5iN0axbq.js`.
@@ -105,8 +114,9 @@ Current public runtime evidence:
   `CI / build-and-test` and backend `Backend CI / pytest-and-rag`; current
   account/repo controls previously returned a GitHub plan/permission blocker.
 - GitHub Actions currently has an account billing/spending-limit blocker for the
-  frontend repo; hosted CI for `76b97ba` and later report-only pushes cannot be
-  trusted until the workflow can start and pass.
+  frontend repo; hosted CI for `bb8f3b4` and later pushes cannot be trusted
+  until the workflow can start and pass. A backend rerun reproduced the same
+  billing/spending-limit annotation.
 - Cloudflare KV `STRATUM_CONFIG` and `RATE_LIMIT` bindings are not active in
   production.
 - Cloudflare D1 persistence is not active until `STRATUM_DB`, `SESSION_SECRET`,
