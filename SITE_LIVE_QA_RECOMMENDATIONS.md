@@ -16,12 +16,13 @@ Earlier notes that the frontend source was missing are now superseded. The sourc
 - Site: `https://edstratumlabs.ai`
 - Cloudflare Pages project: `edstratumlabs`
 - Cloudflare source: GitHub repo `theonlygeranium/edstratum-v2-frontend`
-- Latest frontend production code commit verified: `395d0b8`
-- Current production entry asset: `/assets/index-sWHxdfmn.js`
-- Current STRATUM chat asset: `/assets/StratumChat-DZnOcHe2.js`
+- Latest frontend production code commit verified: `17124c1`
+- Current production entry asset: `/assets/index-q6iZ6B76.js`
+- Current STRATUM chat asset: `/assets/StratumChat-BporotpB.js`
 - Current PDF snapshot assets: `/assets/stratumPDF-Bgc_chGe.js`, `/assets/pdf-vendor-B7fMFYQc.js`
 - Backend: `https://stratum-backend-production-a340.up.railway.app`
-- Latest backend main commit verified by public health/SSE behavior: `fdb357a`
+- Latest backend main source commit pushed: `9172431`
+- Public backend health/runtime routes remain healthy after the source push; Railway runtime does not expose a git SHA, and Railway CLI auth was unavailable for deployment inspection.
 - Backend runtime previously verified: Writer/Palmyra generation, hash embeddings, Railway Postgres-backed graph/session state
 
 ## QA Summary
@@ -59,9 +60,15 @@ Earlier notes that the frontend source was missing are now superseded. The sourc
   - Live backend `/api/tts` enforces the 500-character request contract; validation-only QA returned HTTP 422 without invoking the provider.
   - Live rendered chat smoke verified zero voice playback or mic controls appear while the runtime flag remains disabled.
 - PDF snapshot download deployed:
-  - Live production loads frontend commit `395d0b8` through `/assets/index-sWHxdfmn.js` and `/assets/StratumChat-DZnOcHe2.js`.
+  - Live production loads frontend commit `17124c1` through `/assets/index-q6iZ6B76.js` and `/assets/StratumChat-BporotpB.js`.
   - The chat chunk lazy-loads `/assets/stratumPDF-Bgc_chGe.js` and `/assets/pdf-vendor-B7fMFYQc.js`.
   - Live rendered smoke intercepted `/api/chat`, reached an escalation state, showed `Download Summary`, generated an `edstratum-intake-...pdf` download, and produced no console errors or live notification traffic.
+- SOT QA gate update:
+  - Backend source commit `9172431` aligns the direct `/api/escalate` failure contract with the spec, updates the branded subject line, and switches deploy docs to `ESCALATION_EMAIL_TO` / `ESCALATION_EMAIL_FROM`.
+  - Local backend pytest passed with `123 passed, 1 skipped`.
+  - Direct Railway `/api/escalate` with `X-Stratum-QA: true` and a complete payload returned `{ "success": true, "status": "suppressed" }`, so no notification provider call was made.
+  - The production failure path was not exercised because production has notifications configured and a non-QA test could send a real handoff email.
+  - Frontend commit `17124c1` is deployed with main CI `29728690249` passing `112` Playwright tests, and rendered production smoke verified intercepted handoff UI, PDF download generation, hidden voice controls while disabled, and no console/page errors.
 
 ## Notes For Future Agents
 
@@ -80,6 +87,17 @@ Earlier notes that the frontend source was missing are now superseded. The sourc
 - Backend commit `fdb357a` adds the ElevenLabs TTS proxy contract at `/api/tts` and `/tts`, guarded by Railway-side `ELEVENLABS_API_KEY` and session-scoped rate limiting.
 - Frontend commit `e079033` adds voice input and TTS UI, gated by Cloudflare runtime `voiceEnabled` plus build-time `VITE_TTS_ENABLED`.
 - Frontend commit `395d0b8` adds client-side PDF session snapshots, lazy-loaded PDF renderer chunks, and download UI after readiness completion or escalation.
+
+## Current SOT Blockers
+
+- GitHub branch protection for frontend `main` is not configured to require `CI / build-and-test`; this is still a release-governance blocker.
+- Cloudflare KV rate limiting is not active in production. Live rapid `/api/config` probes did not produce HTTP 429, and the middleware skips enforcement until `RATE_LIMIT` is bound.
+- Cloudflare D1 conversation persistence is not active. `/api/config` returns `persistenceEnabled: false`, and `/api/sessions/.../messages` returns `503 d1_not_configured`.
+- Voice/TTS is not active in production. `/api/config` returns `voiceEnabled: false`, and `/api/health` reports `tts.status: "unconfigured"`.
+- Backend runtime reports `embedding_provider: "hash"` and `vector_store_provider: "chroma"`; this is healthy for current RAG behavior but does not prove a Pinecone/OpenAI production path.
+- TTS source currently buffers provider audio before browser playback and uses the FastAPI/httpx proxy path; it is not yet a true browser streaming/MediaSource implementation.
+- Same-origin Cloudflare `/api/escalate` and `/api/tts` routes are absent and return HTTP 405 on `https://edstratumlabs.ai`; direct Railway routes exist.
+- Wrangler and Railway CLI are unauthenticated in this shell, and no safe control-plane tokens are present, so Cloudflare bindings, Railway env vars, and exact deployment SHAs cannot be changed or verified from here.
 
 ## Completed Feature 1
 
@@ -132,7 +150,7 @@ Earlier notes that the frontend source was missing are now superseded. The sourc
 4. Create and bind Cloudflare KV namespaces `STRATUM_CONFIG` and `RATE_LIMIT` once credentials are available.
 5. Create D1 database `stratum-conversations`, run `schema.sql`, bind it as `STRATUM_DB`, add `SESSION_SECRET`, then set KV runtime `persistenceEnabled: true` only after a live smoke plan is ready.
 6. Configure voice/TTS only after a safe rollout plan: Railway `ELEVENLABS_API_KEY`, optional `ELEVENLABS_VOICE_ID`, Cloudflare Pages `VITE_TTS_ENABLED=true`, then KV runtime `voiceEnabled: true`.
-7. Add CI for `npm ci`, `npm run build`, and forbidden-copy scans.
+7. Add backend CI for pytest and contract tests, and keep frontend `CI / build-and-test` as a required GitHub status.
 8. Add a small public build manifest with git SHA, build timestamp, backend URL, and asset hashes for easier live verification.
 9. Prefer scoped Cloudflare deploy tokens over global credentials, and keep deploy credentials out of checked-in files.
 10. Add privacy-safe chatbot funnel analytics for open, first message, readiness completion, backend error, and handoff intent events.
