@@ -8,7 +8,7 @@ import pytest
 from fastapi.testclient import TestClient
 from pydantic import ValidationError
 
-from app.escalation import detect_direct_trigger
+from app.escalation import build_payload, detect_direct_trigger
 from app.graph import (
     build_stratum_graph,
     initial_state_from_request,
@@ -84,7 +84,6 @@ def test_runtime_reports_non_secret_operational_status() -> None:
     assert data["vector_store_provider"] in {"chroma", "memory"}
     assert data["reranker_provider"] in {"heuristic", "cohere"}
     assert data["required_cors_origins_present"] is True
-
     for key in [
         "database_configured",
         "session_store_database_disabled",
@@ -96,6 +95,30 @@ def test_runtime_reports_non_secret_operational_status() -> None:
         "allowed_origins_env_configured",
     ]:
         assert isinstance(data[key], bool)
+
+
+def test_chat_request_accepts_sentiment_escalation_metadata() -> None:
+    request = ChatRequest.model_validate(
+        {
+            "messages": [
+                {
+                    "role": "user",
+                    "content": "This is urgent and needs attention today.",
+                    "timestamp": 0,
+                }
+            ],
+            "mode": "escalation",
+            "intakeIndex": None,
+            "intakeAnswers": {},
+            "sessionId": "sentiment-contract",
+            "escalationTrigger": "sentiment",
+            "sentimentSignal": "urgency",
+        }
+    )
+
+    assert request.escalation_trigger == "sentiment"
+    assert request.sentiment_signal == "urgency"
+    assert request.model_dump(mode="json", by_alias=True)["sentimentSignal"] == "urgency"
 
 
 @pytest.mark.parametrize("origin", REQUIRED_ORIGINS)
@@ -745,6 +768,7 @@ def test_initial_graph_state_uses_api_contract_names() -> None:
     assert state["source_confidence"] is None
     assert state["citations"] == []
     assert state["escalation_trigger"] is None
+    assert state["sentiment_signal"] is None
     assert state["escalation"] is None
     assert state["snapshot"] is None
     assert state["session_id"] == "contract-graph"
@@ -776,6 +800,62 @@ def test_direct_trigger_routes_without_losing_request_mode() -> None:
     assert route_key(state) == "escalation"
     assert state["escalation_trigger"] == "explicit"
     assert request_from_state(state).mode == "open"
+
+
+def test_sentiment_trigger_routes_from_request_metadata() -> None:
+    request = ChatRequest.model_validate(
+        {
+            "messages": [
+                {
+                    "role": "user",
+                    "content": "I need this now.",
+                    "timestamp": 0,
+                }
+            ],
+            "mode": "escalation",
+            "intakeIndex": None,
+            "intakeAnswers": {},
+            "sessionId": "contract-sentiment-route",
+            "escalationTrigger": "sentiment",
+            "sentimentSignal": "urgency",
+        }
+    )
+    state = initial_state_from_request(request)
+    state.update(route_node(state))
+    routed_request = request_from_state(state)
+
+    assert route_key(state) == "escalation"
+    assert state["escalation_trigger"] == "sentiment"
+    assert state["sentiment_signal"] == "urgency"
+    assert routed_request.mode == "escalation"
+    assert routed_request.escalation_trigger == "sentiment"
+    assert routed_request.sentiment_signal == "urgency"
+
+
+def test_escalation_payload_includes_sentiment_signal() -> None:
+    request = ChatRequest.model_validate(
+        {
+            "messages": [
+                {
+                    "role": "user",
+                    "content": "This is urgent and I need this now.",
+                    "timestamp": 0,
+                }
+            ],
+            "mode": "escalation",
+            "intakeIndex": None,
+            "intakeAnswers": {"timeline": "today"},
+            "sessionId": "contract-sentiment-payload",
+            "escalationTrigger": "sentiment",
+            "sentimentSignal": "urgency",
+        }
+    )
+
+    payload = build_payload(request, "sentiment", None)
+
+    assert payload["escalation_trigger"] == "sentiment"
+    assert payload["key_signals"]["timeline"] == "today"
+    assert payload["key_signals"]["sentiment_signal"] == "urgency"
 
 
 @pytest.mark.parametrize(

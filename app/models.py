@@ -11,6 +11,7 @@ ProcessingPhase = Literal[
 ConversationMode = Literal["open", "intake", "about", "escalation"]
 EscalationTriggerValue = Literal["explicit", "confidence", "high_intent", "sentiment"]
 EscalationTrigger: TypeAlias = EscalationTriggerValue | None
+SentimentSignal = Literal["frustration", "urgency"]
 EscalationDeliveryStatus = Literal[
     "sent", "prepared", "failed", "rate_limited", "suppressed"
 ]
@@ -56,6 +57,14 @@ class ChatRequest(BaseModel):
     intake_index: int | None = Field(default=None, alias="intakeIndex")
     intake_answers: dict[str, str] = Field(default_factory=dict, alias="intakeAnswers")
     session_id: str = Field(alias="sessionId")
+    escalation_trigger: EscalationTriggerValue | None = Field(
+        default=None,
+        alias="escalationTrigger",
+    )
+    sentiment_signal: SentimentSignal | None = Field(
+        default=None,
+        alias="sentimentSignal",
+    )
 
 
 class EscalationDelivery(ContractModel):

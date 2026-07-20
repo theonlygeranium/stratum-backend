@@ -157,16 +157,20 @@ def build_payload(
     trigger: str,
     snapshot: ReadinessSnapshot | None,
 ) -> dict[str, Any]:
+    key_signals: dict[str, str | None] = {
+        "organization_type": request.intake_answers.get("org-type"),
+        "canvas_usage": request.intake_answers.get("canvas-usage"),
+        "timeline": request.intake_answers.get("timeline"),
+        "problem": request.intake_answers.get("problem"),
+    }
+    if request.sentiment_signal:
+        key_signals["sentiment_signal"] = request.sentiment_signal
+
     return {
         "conversation_transcript": format_transcript(request.messages),
         "readiness_snapshot": snapshot.model_dump() if snapshot else None,
         "intent_category": request.mode,
-        "key_signals": {
-            "organization_type": request.intake_answers.get("org-type"),
-            "canvas_usage": request.intake_answers.get("canvas-usage"),
-            "timeline": request.intake_answers.get("timeline"),
-            "problem": request.intake_answers.get("problem"),
-        },
+        "key_signals": key_signals,
         "escalation_trigger": trigger,
         "visitor_contact": extract_contact(request.messages),
         "session_id": request.session_id,

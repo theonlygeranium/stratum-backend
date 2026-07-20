@@ -11,6 +11,7 @@ from app.models import (
     ChatRequest,
     ConversationMode,
     EscalationTrigger,
+    SentimentSignal,
     StratumResult,
 )
 from app.prompts import INTAKE_QUESTIONS
@@ -46,6 +47,7 @@ class StratumState(TypedDict):
     source_confidence: dict[str, Any] | None
     citations: list[dict[str, Any]]
     escalation_trigger: EscalationTrigger
+    sentiment_signal: SentimentSignal | None
     escalation: dict[str, Any] | None
     escalation_context: dict[str, Any] | None
     response_text: str
@@ -69,7 +71,8 @@ def initial_state_from_request(request: ChatRequest) -> StratumState:
         "retrieved_context": [],
         "source_confidence": None,
         "citations": [],
-        "escalation_trigger": None,
+        "escalation_trigger": request.escalation_trigger,
+        "sentiment_signal": request.sentiment_signal,
         "escalation": None,
         "escalation_context": None,
         "response_text": "",
@@ -108,6 +111,8 @@ def request_from_state(state: StratumState) -> ChatRequest:
             "intakeIndex": state.get("intake_index"),
             "intakeAnswers": state.get("intake_answers") or {},
             "sessionId": state["session_id"],
+            "escalationTrigger": state.get("escalation_trigger"),
+            "sentimentSignal": state.get("sentiment_signal"),
         }
     )
 
@@ -121,6 +126,11 @@ def result_from_state(state: StratumState) -> StratumResult:
 
 def route_node(state: StratumState) -> dict[str, Any]:
     request = request_from_state(state)
+    if request.escalation_trigger:
+        return {
+            "mode": "escalation",
+            "escalation_trigger": request.escalation_trigger,
+        }
     trigger = detect_direct_trigger(last_user_text(request.messages))
     if trigger:
         return {"mode": "escalation", "escalation_trigger": trigger}
