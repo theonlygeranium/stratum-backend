@@ -1,6 +1,6 @@
 # STRATUM Deploy Status
 
-Checked on 2026-07-20 UTC after frontend rendered live-smoke command deployment and production smoke.
+Checked on 2026-07-20 UTC after frontend asset fallback hardening, backend release-audit expectation update, and production smokes.
 
 ## Backend
 
@@ -12,7 +12,7 @@ Checked on 2026-07-20 UTC after frontend rendered live-smoke command deployment 
   `41b2ae9`
 - Latest backend workflow/action-migration commit verified: `f7dced4`
 - Latest backend source/tooling commit verified locally, deployed on Railway,
-  and live-smoked: `406089f`
+  and live-smoked: `ac6a69a`
 - Docs-only commits can advance Railway deployment metadata without changing
   backend runtime behavior. Verify the current deployment through GitHub commit
   status, Railway deployment status, and public `/api/health` plus `/api/runtime`.
@@ -43,17 +43,19 @@ Current public runtime evidence:
   `https://www.edstratumlabs.ai`
 - Frontend GitHub repository: `theonlygeranium/edstratum-v2-frontend`
 - Latest frontend production source/tooling commit verified locally and live:
-  `52cdf47`
-- Latest verified app code-bearing asset commit: `36f201f`; live-smoke
-  deployment manifest commits `bb8f3b4` and `52cdf47` left code-bearing asset
-  hashes unchanged.
+  `b51a623`
+- Latest verified app code-bearing asset commit: `b51a623`; it refreshes the
+  entry/chat/service bundle hashes after the Pages fallback fix and confirms
+  the seven-question STRATUM intake runtime contract.
 - Frontend GitHub Actions action-migration commit verified: `d01ce68`;
   frontend CI app-runtime migration commit verified: `f2c969b`;
   CI Playwright server-ownership fix commit `84e01ce` is contained in current
   frontend `main`; Wrangler pin commit `76b97ba`, live-smoke command commit
-  `bb8f3b4`, and rendered live-smoke command commit `52cdf47` are deployed but
-  hosted CI proof is pending because GitHub Actions run `29744589386` failed
-  before starting any steps due to an account billing/spending-limit blocker.
+  `bb8f3b4`, rendered live-smoke command commit `52cdf47`, asset-smoke
+  hardening commit `7eb42dd`, Pages fallback fix commit `b341b07`, and asset
+  hash refresh commit `b51a623` are deployed but hosted CI proof is pending
+  because GitHub Actions run `29748630950` failed before starting any steps due
+  to an account billing/spending-limit blocker.
 - Current production metadata endpoint:
   `https://edstratumlabs.ai/build-manifest.json`
 - The manifest intentionally exposes only non-secret deployment metadata:
@@ -96,6 +98,15 @@ Current public runtime evidence:
   post-deploy backend smoke, deployed matrix, and release audit matrix coverage
   passed. Full release audit still blocks only on branch protection plus hosted
   GitHub Actions billing/spending-limit failures.
+- Backend commit `ac6a69a` makes release-audit runtime expectations
+  configurable through non-secret CLI flags and env vars while preserving the
+  current production defaults. Local py_compile, focused release-audit tests
+  (`5 passed`), full pytest (`136 passed, 1 skipped`), `git diff --check`, and
+  public-only release audit with zero blockers passed. Railway deployment
+  status returned success; post-deploy backend smoke passed; release audit with
+  `--include-conversation-matrix` confirmed public runtime and the deployed
+  54-scenario matrix while still blocking only on branch protection plus hosted
+  GitHub Actions billing/spending-limit failures.
 - Frontend CI runs type-check, lint, production build, dist manifest assertion,
   pinned Cloudflare Pages Functions build, forbidden-copy scan, and Playwright.
   Latest verified frontend workflow run before the billing blocker was
@@ -125,19 +136,27 @@ Current public runtime evidence:
   voice controls while disabled, mobile dialog bounds, and screenshots under
   `/tmp`. Local checks, Cloudflare Pages deployment, post-deploy `qa:live`, and
   post-deploy `qa:live:rendered` all passed.
-- GitHub Actions run `29745502890` for `43d75ce` failed before starting any
+- Frontend commits `05d225a`, `7eb42dd`, `b341b07`, and `b51a623` harden the
+  seven-question intake contract, live asset MIME checks, Cloudflare Pages
+  missing-asset behavior, and current bundle hashes. Local frontend QA through
+  `b51a623` passed type-check, lint, production build, pinned Pages Functions
+  build, and full Playwright (`162 passed`). Post-deploy
+  `EXPECTED_MANIFEST_COMMIT=b51a623 npm run qa:live` and
+  `EXPECTED_MANIFEST_COMMIT=b51a623 npm run qa:live:rendered` both passed.
+- GitHub Actions run `29748630950` for `b51a623` failed before starting any
   steps because of an account billing/spending-limit blocker; rerun hosted CI
   after billing/settings are corrected.
 - Live same-origin `/api/health` on `https://edstratumlabs.ai` proxies Railway
   and returns healthy status.
 - Live `/api/config` currently returns `ragEnabled: true`,
   `voiceEnabled: false`, `persistenceEnabled: false`, and
-  `maxIntakeQuestions: 6`.
+  `maxIntakeQuestions: 7`.
 - Live build manifest after the rendered live-smoke deploy returned HTTP 200 with
-  `Cache-Control: public, max-age=60, must-revalidate`, commit `52cdf47`, the
-  Railway backend URL, 13 hashed assets, and unchanged code-bearing assets
-  `/assets/index-Cld5-OrE.js`, `/assets/index-DH0EGGDC.css`, and
-  `/assets/StratumChat-5iN0axbq.js`.
+  `Cache-Control: public, max-age=60, must-revalidate`, commit `b51a623`, the
+  Railway backend URL, current code-bearing assets `/assets/index-DjtEbwVx.js`,
+  `/assets/index-DH0EGGDC.css`, `/assets/StratumChat-C9GJIMk2.js`, and
+  `/assets/Services-_OuHsgfp.js`, and PDF assets
+  `/assets/stratumPDF-Bgc_chGe.js` plus `/assets/pdf-vendor-B7fMFYQc.js`.
 - Escalation QA must use `X-Stratum-QA`, `X-Stratum-Eval`, or intercepted SSE.
   Do not trigger live email delivery unless explicitly requested.
 
@@ -147,9 +166,9 @@ Current public runtime evidence:
   `CI / build-and-test` and backend `Backend CI / pytest-and-rag`; current
   account/repo controls previously returned a GitHub plan/permission blocker.
 - GitHub Actions currently has an account billing/spending-limit blocker for the
-  frontend repo; hosted CI for `43d75ce` and later pushes cannot be trusted
-  until the workflow can start and pass. Backend run `29746454396` for
-  `406089f` reproduced the same billing/spending-limit annotation before any
+  frontend repo; hosted CI for `b51a623` and later pushes cannot be trusted
+  until the workflow can start and pass. Backend run `29747403438` for
+  `ac6a69a` reproduced the same billing/spending-limit annotation before any
   workflow steps started.
 - Cloudflare KV `STRATUM_CONFIG` and `RATE_LIMIT` bindings are not active in
   production.
