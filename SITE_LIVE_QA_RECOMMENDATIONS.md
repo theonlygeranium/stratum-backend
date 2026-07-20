@@ -18,7 +18,7 @@ Earlier notes that the frontend source was missing are now superseded. The sourc
 - Cloudflare source: GitHub repo `theonlygeranium/edstratum-v2-frontend`
 - Latest frontend production code-bearing commit verified: `36f201f`
 - Latest verified code-bearing frontend manifest commit: `36f201f`; docs-only pushes can advance the manifest git SHA while leaving code-bearing asset hashes unchanged.
-- Latest verified frontend workflow-only manifest commit: `d01ce68`
+- Frontend GitHub Actions action-migration commit verified: `d01ce68`; later report-only pushes can advance the manifest git SHA while leaving code-bearing asset hashes unchanged.
 - Current production entry asset: `/assets/index-Cld5-OrE.js`
 - Current production stylesheet asset: `/assets/index-DH0EGGDC.css`
 - Current STRATUM chat asset: `/assets/StratumChat-5iN0axbq.js`

@@ -41,7 +41,9 @@ Current public runtime evidence:
   `https://www.edstratumlabs.ai`
 - Frontend GitHub repository: `theonlygeranium/edstratum-v2-frontend`
 - Latest frontend code-bearing manifest commit verified: `36f201f`
-- Latest frontend workflow-only manifest commit verified: `d01ce68`
+- Frontend GitHub Actions action-migration commit verified: `d01ce68`;
+  later report-only pushes can advance the manifest SHA while code-bearing asset
+  hashes remain unchanged.
 - Current production metadata endpoint:
   `https://edstratumlabs.ai/build-manifest.json`
 - The manifest intentionally exposes only non-secret deployment metadata:
