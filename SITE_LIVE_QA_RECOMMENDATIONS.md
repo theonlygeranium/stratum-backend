@@ -16,8 +16,8 @@ Earlier notes that the frontend source was missing are now superseded. The sourc
 - Site: `https://edstratumlabs.ai`
 - Cloudflare Pages project: `edstratumlabs`
 - Cloudflare source: GitHub repo `theonlygeranium/edstratum-v2-frontend`
-- Last all-up audited frontend deployment before the activation-readiness source pass: `0c0fb28`; the same-origin `/api/chat` proxy behavior was introduced in code-bearing commit `e1921ec`, with live-smoke assertions through `afce38b` and report evidence in `7365bee`.
-- Latest audited frontend asset set before the activation-readiness source pass is from manifest commit `0c0fb28`; it confirms the seven-question STRATUM intake runtime contract and same-origin chat proxy path.
+- Latest all-up audited frontend deployment after the activation-readiness source pass: `50c39d4`; the same-origin `/api/chat` proxy behavior was introduced in code-bearing commit `e1921ec`, with live-smoke assertions through `afce38b` and report evidence in `7365bee`.
+- Latest audited frontend asset set is from manifest commit `50c39d4`; it confirms the seven-question STRATUM intake runtime contract, same-origin chat proxy path, and the source-controlled activation-readiness audit.
 - Frontend GitHub Actions action-migration commit verified: `d01ce68`; frontend CI app-runtime migration commit verified: `f2c969b`; CI Playwright server-ownership fix commit `84e01ce` is already contained in current `main`; Wrangler pin commit `76b97ba`, live-smoke command commit `bb8f3b4`, rendered live-smoke command commit `52cdf47`, asset-smoke hardening commit `7eb42dd`, Pages fallback fix commit `b341b07`, asset hash refresh commit `b51a623`, same-origin proxy commits through `7365bee`, readiness test locator fix commit `e10a8cd`, governance report commit `64a1361`, and audited docs commit `0c0fb28` are deployed. Hosted CI proof is current again: frontend run `29756399225` for `0c0fb28` passed `170` Playwright tests after the repos were made public.
 - Current production entry asset: `/assets/index-C17Q75GX.js`
 - Current production stylesheet asset: `/assets/index-DH0EGGDC.css`
@@ -26,18 +26,18 @@ Earlier notes that the frontend source was missing are now superseded. The sourc
 - Current PDF snapshot assets: `/assets/stratumPDF-Bgc_chGe.js`, `/assets/pdf-vendor-B7fMFYQc.js`
 - Current public build manifest: `https://edstratumlabs.ai/build-manifest.json`
 - Backend: `https://stratum-backend-production-a340.up.railway.app`
-- Latest backend code-bearing runtime/tooling commit verified: `3a483cb`; latest backend main/hosted CI commit verified before the frontend activation-readiness source pass: `996e0cf` (`Add release audit activation profiles`).
+- Latest backend code-bearing runtime/tooling commit verified: `3a483cb`; latest backend main/hosted CI commit verified after the frontend activation-readiness source pass: `8d73696` (`docs: record frontend activation audit readiness`).
 - Latest backend workflow/action-migration commit with hosted CI proof: `f7dced4`
-- Latest backend runtime/tooling commit verified locally, deployed on Railway, and live-smoked: `3a483cb`; latest backend activation-profile audit commit verified with hosted CI and Railway status: `996e0cf`.
-- Public backend health/runtime routes remain healthy after the source pushes; GitHub status for `996e0cf` reports Railway deployment success and backend hosted CI run `29756400486` completed successfully with the `Pytest & RAG eval` job plus `Backend CI / pytest-and-rag` commit status.
+- Latest backend runtime/tooling commit verified locally, deployed on Railway, and live-smoked: `3a483cb`; latest backend activation-profile audit docs commit verified with hosted CI and Railway status: `8d73696`.
+- Public backend health/runtime routes remain healthy after the source pushes; GitHub status for `8d73696` reports Railway deployment success and backend hosted CI run `29757377141` completed successfully with the `Pytest & RAG eval` job plus `Backend CI / pytest-and-rag` commit status.
 - Backend runtime previously verified: Writer/Palmyra generation, hash embeddings, Railway Postgres-backed graph/session state
 
 ## QA Summary
 
 - Backend health, runtime, pytest suite, RAG eval, and deployed conversation matrix passed in the backend live QA pass.
-- Post-public-repo governance QA passed on 2026-07-20: frontend `main` branch protection requires `CI / build-and-test`, backend `main` branch protection requires `Backend CI / pytest-and-rag`, latest hosted CI is green in both repos, and `.venv/bin/python scripts/live_release_audit.py --include-conversation-matrix` passed with `0` blockers for frontend `0c0fb28` and backend `996e0cf`.
+- Post-public-repo governance QA passed on 2026-07-20: frontend `main` branch protection requires `CI / build-and-test`, backend `main` branch protection requires `Backend CI / pytest-and-rag`, latest hosted CI is green in both repos, and `.venv/bin/python scripts/live_release_audit.py --include-conversation-matrix` passed with `0` blockers for frontend `50c39d4` and backend `8d73696`.
 - Release audit activation profiles are source-ready for future rollout proof: `current`, `managed-rag`, `voice`, `persistence`, and `full-activation`. A public-only `--activation-profile full-activation` check now blocks on the expected inactive pieces: frontend `voiceEnabled`, frontend `persistenceEnabled`, backend `tts.status=ok`, backend `embedding_provider=openai`, and backend `vector_store_provider=pinecone`.
-- Frontend activation readiness audit is source-ready for future control-plane rollout proof. `npm run qa:activation` checks Cloudflare binding names, current public runtime, zero-event analytics binding state, D1 auth-gating, same-origin TTS fail-closed or validation-only behavior, and backend runtime providers; `--profile full-activation` currently blocks on the expected inactive Cloudflare, TTS, and managed RAG pieces.
+- Frontend activation readiness audit commit `50c39d4` is deployed for future control-plane rollout proof. `npm run qa:activation` checks Cloudflare binding names, current public runtime, zero-event analytics binding state, D1 auth-gating, same-origin TTS fail-closed or validation-only behavior, and backend runtime providers; `--profile full-activation` currently blocks on the expected inactive Cloudflare, TTS, and managed RAG pieces. Hosted frontend CI run `29757373250`, Cloudflare Pages, `EXPECTED_MANIFEST_COMMIT=50c39d4 npm run qa:live`, `npm run qa:activation`, and `EXPECTED_MANIFEST_COMMIT=50c39d4 npm run qa:live:rendered` all passed after deploy.
 - Frontend source build passes `npm run build`.
 - Local frontend production preview passed desktop and mobile chatbot open/respond checks in mock mode.
 - Live production domain loads the source-built frontend entrypoint.
@@ -212,7 +212,7 @@ Earlier notes that the frontend source was missing are now superseded. The sourc
 
 ## Current SOT Blockers
 
-- No active release-governance blocker remained in the latest all-up audit before the activation-readiness source pass on 2026-07-20: frontend `main` requires `CI / build-and-test`, backend `main` requires `Backend CI / pytest-and-rag`, hosted CI was green in both repos, Cloudflare Pages was green for frontend `0c0fb28`, Railway was green for backend `996e0cf`, and `.venv/bin/python scripts/live_release_audit.py --include-conversation-matrix` passed with `0` blockers.
+- No active release-governance blocker remains after the activation-readiness source pass on 2026-07-20: frontend `main` requires `CI / build-and-test`, backend `main` requires `Backend CI / pytest-and-rag`, hosted CI is green in both repos, Cloudflare Pages is green for frontend `50c39d4`, Railway is green for backend `8d73696`, and `.venv/bin/python scripts/live_release_audit.py --include-conversation-matrix` passed with `0` blockers.
 - Cloudflare KV rate limiting is not active in production. Live rapid `/api/config` probes did not produce HTTP 429, and the middleware skips enforcement until `RATE_LIMIT` is bound.
 - Cloudflare analytics aggregation is not active in production. Live `/api/analytics` returns `503 analytics_not_configured` until `ANALYTICS_EVENTS` is bound.
 - Cloudflare D1 conversation persistence is not active. `/api/config` returns `persistenceEnabled: false`, and `/api/sessions/.../messages` returns `503 d1_not_configured`.
