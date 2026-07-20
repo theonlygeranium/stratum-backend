@@ -66,6 +66,9 @@ Useful optional variables:
 - `RERANKER_PROVIDER`: leave unset/blank for auto mode (`cohere` when
   `COHERE_API_KEY` is present, otherwise `heuristic`), or set explicitly.
 - `RERANKER_MODEL`: default `rerank-v4.0-fast`.
+- `RESEND_FROM_EMAIL`: optional sender address. Defaults to
+  `stratum@edstratumlabs.ai` and falls back to Resend's default sender if the
+  domain sender is not accepted.
 
 ## Verification
 

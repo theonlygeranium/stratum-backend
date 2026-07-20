@@ -13,6 +13,8 @@ from app.config import Settings
 from app.models import ChatMessage, ChatRequest, ReadinessSnapshot
 
 
+RESEND_FALLBACK_FROM_EMAIL = "onboarding@resend.dev"
+
 EXPLICIT_KEYWORDS = [
     "talk to jeffrey",
     "connect me with the founder",
@@ -182,24 +184,36 @@ async def send_or_log_escalation(
     if not settings.resend_api_key or not settings.jeffrey_email:
         return False
 
+    senders = list(
+        dict.fromkeys([settings.resend_from_email, RESEND_FALLBACK_FROM_EMAIL])
+    )
     try:
         async with httpx.AsyncClient(timeout=10) as client:
-            response = await client.post(
-                "https://api.resend.com/emails",
-                headers={
-                    "Authorization": f"Bearer {settings.resend_api_key}",
-                    "Content-Type": "application/json",
-                },
-                json={
-                    "from": "stratum@edstratumlabs.ai",
-                    "to": [settings.jeffrey_email],
-                    "subject": f"STRATUM Escalation - {payload['escalation_trigger'].title()} Trigger",
-                    "html": format_email_html(payload),
-                },
-            )
-            response.raise_for_status()
-        return True
+            for sender in senders:
+                try:
+                    response = await client.post(
+                        "https://api.resend.com/emails",
+                        headers={
+                            "Authorization": f"Bearer {settings.resend_api_key}",
+                            "Content-Type": "application/json",
+                        },
+                        json={
+                            "from": sender,
+                            "to": [settings.jeffrey_email],
+                            "subject": (
+                                "STRATUM Escalation - "
+                                f"{payload['escalation_trigger'].title()} Trigger"
+                            ),
+                            "html": format_email_html(payload),
+                        },
+                    )
+                    response.raise_for_status()
+                    return True
+                except Exception:
+                    continue
     except Exception:
-        # Email notification failed, but the escalation was already logged
-        # to disk above. Do not crash the user-facing response.
-        return False
+        pass
+
+    # Email notification failed, but the escalation was already logged
+    # to disk above. Do not crash the user-facing response.
+    return False

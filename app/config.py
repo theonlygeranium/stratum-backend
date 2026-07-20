@@ -30,6 +30,7 @@ class Settings:
     llm_model: str
     resend_api_key: str | None
     jeffrey_email: str | None
+    resend_from_email: str
 
 
 def get_settings() -> Settings:
@@ -93,4 +94,7 @@ def get_settings() -> Settings:
         llm_model=os.getenv("LLM_MODEL", "gpt-4o"),
         resend_api_key=os.getenv("RESEND_API_KEY") or None,
         jeffrey_email=os.getenv("JEFFREY_EMAIL") or None,
+        resend_from_email=(
+            os.getenv("RESEND_FROM_EMAIL") or "stratum@edstratumlabs.ai"
+        ),
     )

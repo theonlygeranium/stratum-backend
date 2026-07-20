@@ -29,6 +29,7 @@ def _settings() -> Settings:
         llm_model="gpt-4o",
         resend_api_key=None,
         jeffrey_email=None,
+        resend_from_email="stratum@example.com",
     )
 
 
