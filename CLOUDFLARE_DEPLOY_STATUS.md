@@ -1,6 +1,6 @@
 # STRATUM Deploy Status
 
-Checked on 2026-07-20 UTC after frontend CI app-runtime Node 24 verification.
+Checked on 2026-07-20 UTC after frontend Wrangler pin deployment and live smoke.
 
 ## Backend
 
@@ -40,11 +40,15 @@ Current public runtime evidence:
 - Production aliases: `https://edstratumlabs.ai`,
   `https://www.edstratumlabs.ai`
 - Frontend GitHub repository: `theonlygeranium/edstratum-v2-frontend`
-- Latest frontend code-bearing manifest commit verified: `36f201f`
+- Latest frontend production source/tooling commit verified locally and live: `76b97ba`
+- Latest verified app code-bearing asset commit: `36f201f`; Wrangler pin
+  deployment manifest commit `76b97ba` left code-bearing asset hashes
+  unchanged.
 - Frontend GitHub Actions action-migration commit verified: `d01ce68`;
   frontend CI app-runtime migration commit verified: `f2c969b`;
-  later report-only pushes can advance the manifest SHA while code-bearing asset
-  hashes remain unchanged.
+  Wrangler pin commit `76b97ba` is deployed but hosted CI proof is pending
+  because GitHub Actions run `29742456851` failed before starting any steps due
+  to an account billing/spending-limit blocker.
 - Current production metadata endpoint:
   `https://edstratumlabs.ai/build-manifest.json`
 - The manifest intentionally exposes only non-secret deployment metadata:
@@ -64,9 +68,9 @@ Current public runtime evidence:
 - Backend CI runs `pytest -q`, `scripts/eval_rag.py --json` with Bash
   `pipefail`, and uploads `rag-eval-report.json` every run.
 - Frontend CI runs type-check, lint, production build, dist manifest assertion,
-  Cloudflare Pages Functions build, forbidden-copy scan, and Playwright. Latest
-  verified frontend workflow run `29739390956` passed with `156` Playwright
-  tests.
+  pinned Cloudflare Pages Functions build, forbidden-copy scan, and Playwright.
+  Latest verified frontend workflow run before the billing blocker was
+  `29741097306`, which passed with `156` Playwright tests.
 - GitHub Actions are now pinned to Node 24-native action majors in the frontend
   (`d01ce68`) and backend (`f7dced4`) workflows. Strict hosted-log searches
   found no deprecated Node.js 20 JavaScript-action warning after migration.
@@ -74,14 +78,24 @@ Current public runtime evidence:
   Hosted run `29741097306` passed with `156` Playwright tests and confirmed
   `node: v24.18.0`; local Node 24 QA also passed type-check, lint, build,
   Wrangler `4.112.0` Pages Functions build, and full Playwright.
+- Frontend commit `76b97ba` pins Wrangler as exact devDependency `4.112.0` and
+  uses `./node_modules/.bin/wrangler` in CI and `deploy.sh`. Local Node 24 QA
+  passed `npm ci`, `bash -n deploy.sh`, the guarded non-deploy helper smoke,
+  pinned Wrangler version check, type-check, lint, production build, pinned
+  Pages Functions build, and full Playwright (`156 passed`).
+- GitHub Actions run `29742456851` for `76b97ba` failed before starting any
+  steps because of an account billing/spending-limit blocker; rerun hosted CI
+  after billing/settings are corrected.
 - Live same-origin `/api/health` on `https://edstratumlabs.ai` proxies Railway
   and returns healthy status.
 - Live `/api/config` currently returns `ragEnabled: true`,
   `voiceEnabled: false`, `persistenceEnabled: false`, and
   `maxIntakeQuestions: 6`.
-- Live build manifest returns HTTP 200 with
-  `Cache-Control: public, max-age=60, must-revalidate`, the Railway backend URL,
-  13 hashed assets, and matching SHA-256 for the served STRATUM chat chunk.
+- Live build manifest after the Wrangler pin deploy returned HTTP 200 with
+  `Cache-Control: public, max-age=60, must-revalidate`, commit `76b97ba`, the
+  Railway backend URL, 13 hashed assets, and unchanged code-bearing assets
+  `/assets/index-Cld5-OrE.js`, `/assets/index-DH0EGGDC.css`, and
+  `/assets/StratumChat-5iN0axbq.js`.
 - Escalation QA must use `X-Stratum-QA`, `X-Stratum-Eval`, or intercepted SSE.
   Do not trigger live email delivery unless explicitly requested.
 
@@ -90,6 +104,9 @@ Current public runtime evidence:
 - GitHub branch protection still needs required checks for frontend
   `CI / build-and-test` and backend `Backend CI / pytest-and-rag`; current
   account/repo controls previously returned a GitHub plan/permission blocker.
+- GitHub Actions currently has an account billing/spending-limit blocker for the
+  frontend repo; hosted CI for `76b97ba` and later report-only pushes cannot be
+  trusted until the workflow can start and pass.
 - Cloudflare KV `STRATUM_CONFIG` and `RATE_LIMIT` bindings are not active in
   production.
 - Cloudflare D1 persistence is not active until `STRATUM_DB`, `SESSION_SECRET`,
@@ -97,6 +114,3 @@ Current public runtime evidence:
 - Railway managed RAG provider activation is pending as described above.
 - Voice/TTS activation is pending Railway ElevenLabs credentials plus frontend
   and runtime feature flags.
-- Wrangler is still invoked dynamically through `npx wrangler pages functions
-  build`; consider pinning it in the frontend repo for more deterministic
-  future CI runs.
