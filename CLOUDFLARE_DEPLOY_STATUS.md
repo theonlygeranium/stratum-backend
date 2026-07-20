@@ -25,7 +25,7 @@ Checked on 2026-07-19 after the Railway-backed STRATUM deployment.
 - Backend test suite: `87 passed, 1 skipped, 2 warnings`
 - Optional Postgres checkpoint smoke: passed locally with `STRATUM_TEST_DATABASE_URL`.
 - RAG acceptance harness: passed locally with Recall@10 `1.0`, groundedness proxy `1.0`, and no-key first-token latency `6.35ms`.
-- Deployed Phase 4 conversation matrix: `54` live turns passed with contract pass rate `1.0`, expected behavior `1.0`, persona consistency `1.0`, no-hallucination proxy `1.0`, snapshot delivery `1.0`, scripted escalation rate `0.2222`, abandonment proxy `0.0`, and first-token latency p95 `1161.58ms`.
+- Deployed Phase 4 conversation matrix: `54` live turns passed with contract pass rate `1.0`, expected behavior `1.0`, persona consistency `1.0`, no-hallucination proxy `1.0`, snapshot delivery `1.0`, scripted escalation rate `0.2222`, abandonment proxy `0.0`, and first-token latency p50 `33.23ms` / p95 `252.38ms`.
 - OpenAI-compatible provider streaming path: covered by parser and progressive-stream contract tests.
 - Docker build: passed with the Railway-compatible `${PORT:-8000}` command.
 - Secret/token scan: no matches in tracked backend source.
