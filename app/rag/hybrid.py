@@ -206,6 +206,9 @@ class HybridRetriever:
         embedding_api_key: str | None = None,
         vector_store_provider: str = "chroma",
         chroma_persist_dir: Path | None = None,
+        pinecone_api_key: str | None = None,
+        pinecone_index: str | None = None,
+        pinecone_namespace: str | None = None,
         reranker_provider: str = "heuristic",
         reranker_model: str = "rerank-v4.0-fast",
         cohere_api_key: str | None = None,
@@ -231,6 +234,9 @@ class HybridRetriever:
             ),
             vector_store_provider=vector_store_provider,
             chroma_persist_dir=chroma_persist_dir,
+            pinecone_api_key=pinecone_api_key,
+            pinecone_index=pinecone_index,
+            pinecone_namespace=pinecone_namespace,
         )
         self.embedding_provider = self._vector_index.embedding_provider.name
         self.vector_store_provider = self._vector_index.vector_store_provider

@@ -15,6 +15,7 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
+from app.config import get_settings  # noqa: E402
 from app.rag.hybrid import HybridRetriever  # noqa: E402
 
 
@@ -32,7 +33,22 @@ def load_golden(path: Path) -> list[dict[str, Any]]:
 
 def evaluate_retrieval(cases: list[dict[str, Any]]) -> dict[str, Any]:
     start = time.perf_counter()
-    retriever = HybridRetriever(KB_DIR)
+    settings = get_settings()
+    retriever = HybridRetriever(
+        settings.knowledge_base_dir,
+        confidence_threshold=settings.confidence_threshold,
+        embedding_provider=settings.embedding_provider,
+        embedding_model=settings.embedding_model,
+        embedding_api_key=settings.openai_api_key,
+        vector_store_provider=settings.vector_store_provider,
+        chroma_persist_dir=settings.chroma_persist_dir,
+        pinecone_api_key=settings.pinecone_api_key,
+        pinecone_index=settings.pinecone_index,
+        pinecone_namespace=settings.pinecone_namespace,
+        reranker_provider=settings.reranker_provider,
+        reranker_model=settings.reranker_model,
+        cohere_api_key=settings.cohere_api_key,
+    )
     init_ms = (time.perf_counter() - start) * 1000
 
     hits = 0

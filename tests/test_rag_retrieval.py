@@ -71,7 +71,7 @@ def test_canvas_lti_query_retrieves_canvas_source() -> None:
     assert result.docs[0].metadata["service_area"] == "canvas"
     assert "Canvas" in result.source.label
     assert result.docs[0].metadata["embedding_provider"] in {"hash", "openai"}
-    assert result.docs[0].metadata["vector_store_provider"] in {"chroma", "memory"}
+    assert result.docs[0].metadata["vector_store_provider"] in {"chroma", "memory", "pinecone"}
     assert result.docs[0].metadata["reranker_provider"] in {"heuristic", "cohere"}
     assert "heuristic_score" in result.docs[0].metadata
 

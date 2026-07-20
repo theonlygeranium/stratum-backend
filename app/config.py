@@ -21,6 +21,9 @@ class Settings:
     embedding_model: str
     vector_store_provider: str
     chroma_persist_dir: Path | None
+    pinecone_api_key: str | None
+    pinecone_index: str | None
+    pinecone_namespace: str | None
     reranker_provider: str
     reranker_model: str
     openai_api_key: str | None
@@ -89,8 +92,13 @@ def get_settings() -> Settings:
         database_url=os.getenv("DATABASE_URL") or None,
         embedding_provider=(os.getenv("EMBEDDING_PROVIDER") or "hash").strip().lower(),
         embedding_model=os.getenv("EMBEDDING_MODEL", "text-embedding-3-small"),
-        vector_store_provider=os.getenv("VECTOR_STORE_PROVIDER", "chroma"),
+        vector_store_provider=(
+            os.getenv("VECTOR_STORE_PROVIDER", "chroma").strip().lower()
+        ),
         chroma_persist_dir=chroma_dir,
+        pinecone_api_key=os.getenv("PINECONE_API_KEY") or None,
+        pinecone_index=os.getenv("PINECONE_INDEX") or None,
+        pinecone_namespace=os.getenv("PINECONE_NAMESPACE") or None,
         reranker_provider=(
             os.getenv("RERANKER_PROVIDER")
             or ("cohere" if cohere_api_key else "heuristic")

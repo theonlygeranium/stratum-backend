@@ -64,11 +64,16 @@ class DenseVectorIndex:
         embedding_provider: EmbeddingProvider,
         vector_store_provider: str,
         chroma_persist_dir: Path | None = None,
+        pinecone_api_key: str | None = None,
+        pinecone_index: str | None = None,
+        pinecone_namespace: str | None = None,
     ):
         self.texts = texts
         self.embedding_provider = embedding_provider
         self.vector_store_provider = "memory"
         self._collection = None
+        self._pinecone_index = None
+        self._pinecone_namespace = pinecone_namespace or ""
 
         try:
             self._embeddings = embedding_provider.embed_documents(texts)
@@ -76,7 +81,15 @@ class DenseVectorIndex:
             self.embedding_provider = HashEmbeddingProvider()
             self._embeddings = self.embedding_provider.embed_documents(texts)
 
-        if vector_store_provider == "chroma":
+        requested_store = (vector_store_provider or "chroma").strip().lower()
+        if requested_store == "pinecone":
+            self._build_pinecone(
+                api_key=pinecone_api_key,
+                index_name=pinecone_index,
+            )
+            if self.vector_store_provider != "pinecone":
+                self._build_chroma(chroma_persist_dir)
+        elif requested_store == "chroma":
             self._build_chroma(chroma_persist_dir)
 
     def rank(self, query: str, indexes: list[int]) -> list[tuple[int, float]]:
@@ -84,9 +97,49 @@ class DenseVectorIndex:
             return []
         query_embedding = self.embedding_provider.embed_query(query)
         allowed = set(indexes)
+        if self._pinecone_index is not None:
+            return self._rank_pinecone(query_embedding, allowed, indexes)
         if self._collection is not None:
-            return self._rank_chroma(query_embedding, allowed)
+            try:
+                return self._rank_chroma(query_embedding, allowed)
+            except Exception:
+                self._collection = None
+                self.vector_store_provider = "memory"
+                return self._rank_memory(query_embedding, indexes)
         return self._rank_memory(query_embedding, indexes)
+
+    def _build_pinecone(
+        self,
+        *,
+        api_key: str | None,
+        index_name: str | None,
+    ) -> None:
+        if not api_key or not index_name:
+            self._pinecone_index = None
+            return
+
+        try:
+            from pinecone import Pinecone
+
+            client = Pinecone(api_key=api_key)
+            index = client.Index(index_name)
+            vectors = [
+                {
+                    "id": f"stratum-kb-{position}",
+                    "values": embedding,
+                    "metadata": {"index": position},
+                }
+                for position, embedding in enumerate(self._embeddings)
+            ]
+            if vectors:
+                index.upsert(
+                    vectors=vectors,
+                    namespace=self._pinecone_namespace,
+                )
+            self._pinecone_index = index
+            self.vector_store_provider = "pinecone"
+        except Exception:
+            self._pinecone_index = None
 
     def _build_chroma(self, persist_dir: Path | None) -> None:
         try:
@@ -142,6 +195,34 @@ class DenseVectorIndex:
             ranked.append((index, 1.0 / (1.0 + float(distance))))
         return sorted(ranked, key=lambda item: item[1], reverse=True)
 
+    def _rank_pinecone(
+        self,
+        query_embedding: list[float],
+        allowed: set[int],
+        indexes: list[int],
+    ) -> list[tuple[int, float]]:
+        if self._pinecone_index is None:
+            return []
+
+        try:
+            result = self._pinecone_index.query(
+                vector=query_embedding,
+                top_k=len(self.texts),
+                include_metadata=True,
+                namespace=self._pinecone_namespace,
+            )
+        except Exception:
+            return self._rank_memory(query_embedding, indexes)
+
+        ranked: list[tuple[int, float]] = []
+        for match in _pinecone_matches(result):
+            metadata = _pinecone_match_metadata(match)
+            index = int(metadata.get("index", -1))
+            if index not in allowed:
+                continue
+            ranked.append((index, _pinecone_match_score(match)))
+        return sorted(ranked, key=lambda item: item[1], reverse=True)
+
     def _rank_memory(
         self,
         query_embedding: list[float],
@@ -169,6 +250,30 @@ def build_embedding_provider(
         except Exception:
             pass
     return HashEmbeddingProvider()
+
+
+def _pinecone_matches(result: object) -> list[object]:
+    if isinstance(result, dict):
+        matches = result.get("matches", [])
+    else:
+        matches = getattr(result, "matches", [])
+    return list(matches or [])
+
+
+def _pinecone_match_metadata(match: object) -> dict[str, object]:
+    if isinstance(match, dict):
+        metadata = match.get("metadata", {})
+    else:
+        metadata = getattr(match, "metadata", {})
+    return metadata if isinstance(metadata, dict) else {}
+
+
+def _pinecone_match_score(match: object) -> float:
+    if isinstance(match, dict):
+        score = match.get("score", 0.0)
+    else:
+        score = getattr(match, "score", 0.0)
+    return float(score or 0.0)
 
 
 def _normalize(vector: list[float]) -> list[float]:

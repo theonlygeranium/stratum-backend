@@ -83,7 +83,7 @@ def test_runtime_reports_non_secret_operational_status() -> None:
     assert data["checkpointer"] in {"uninitialized", "memory", "postgres", "none"}
     assert data["session_store_backend"] in {"postgres", "memory"}
     assert data["embedding_provider"] in {"hash", "openai"}
-    assert data["vector_store_provider"] in {"chroma", "memory"}
+    assert data["vector_store_provider"] in {"chroma", "memory", "pinecone"}
     assert data["reranker_provider"] in {"heuristic", "cohere"}
     assert data["required_cors_origins_present"] is True
     for key in [

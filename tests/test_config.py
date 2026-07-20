@@ -137,3 +137,19 @@ def test_explicit_provider_env_overrides_auto_defaults(monkeypatch) -> None:
 
     assert settings.embedding_provider == "hash"
     assert settings.reranker_provider == "heuristic"
+
+
+def test_pinecone_settings_are_modeled_and_vector_provider_normalized(
+    monkeypatch,
+) -> None:
+    monkeypatch.setenv("VECTOR_STORE_PROVIDER", " Pinecone ")
+    monkeypatch.setenv("PINECONE_API_KEY", "test-pinecone-key")
+    monkeypatch.setenv("PINECONE_INDEX", "stratum-test")
+    monkeypatch.setenv("PINECONE_NAMESPACE", "staging")
+
+    settings = get_settings()
+
+    assert settings.vector_store_provider == "pinecone"
+    assert settings.pinecone_api_key == "test-pinecone-key"
+    assert settings.pinecone_index == "stratum-test"
+    assert settings.pinecone_namespace == "staging"

@@ -66,8 +66,12 @@ Useful optional variables:
 - `EMBEDDING_PROVIDER`: default `hash`. Set to `openai` only when
   `OPENAI_API_KEY` is separately configured for embeddings.
 - `EMBEDDING_MODEL`: default `text-embedding-3-small`.
-- `VECTOR_STORE_PROVIDER`: `chroma` by default, falling back to memory if Chroma is unavailable.
+- `VECTOR_STORE_PROVIDER`: `chroma` by default. Set to `pinecone` only with
+  `PINECONE_API_KEY` and `PINECONE_INDEX`; setup falls back to Chroma or memory
+  if the managed vector store is unavailable.
 - `CHROMA_PERSIST_DIR`: optional path for persistent local Chroma storage.
+- `PINECONE_NAMESPACE`: optional namespace for isolating staging/production KB
+  vectors in a shared Pinecone index.
 - `RERANKER_PROVIDER`: leave unset/blank for auto mode (`cohere` when
   `COHERE_API_KEY` is present, otherwise `heuristic`), or set explicitly.
 - `RERANKER_MODEL`: default `rerank-v4.0-fast`.
