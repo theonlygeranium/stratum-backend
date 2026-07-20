@@ -16,9 +16,10 @@ Earlier notes that the frontend source was missing are now superseded. The sourc
 - Site: `https://edstratumlabs.ai`
 - Cloudflare Pages project: `edstratumlabs`
 - Cloudflare source: GitHub repo `theonlygeranium/edstratum-v2-frontend`
-- Latest frontend production code commit verified: `e079033`
-- Current production entry asset: `/assets/index-CCzuKg1J.js`
-- Current STRATUM chat asset: `/assets/StratumChat-CzklqdIB.js`
+- Latest frontend production code commit verified: `395d0b8`
+- Current production entry asset: `/assets/index-sWHxdfmn.js`
+- Current STRATUM chat asset: `/assets/StratumChat-DZnOcHe2.js`
+- Current PDF snapshot assets: `/assets/stratumPDF-Bgc_chGe.js`, `/assets/pdf-vendor-B7fMFYQc.js`
 - Backend: `https://stratum-backend-production-a340.up.railway.app`
 - Latest backend main commit verified by public health/SSE behavior: `fdb357a`
 - Backend runtime previously verified: Writer/Palmyra generation, hash embeddings, Railway Postgres-backed graph/session state
@@ -57,6 +58,10 @@ Earlier notes that the frontend source was missing are now superseded. The sourc
   - Live `https://edstratumlabs.ai/api/health` returns `tts: { status: "unconfigured", provider: "elevenlabs" }`.
   - Live backend `/api/tts` enforces the 500-character request contract; validation-only QA returned HTTP 422 without invoking the provider.
   - Live rendered chat smoke verified zero voice playback or mic controls appear while the runtime flag remains disabled.
+- PDF snapshot download deployed:
+  - Live production loads frontend commit `395d0b8` through `/assets/index-sWHxdfmn.js` and `/assets/StratumChat-DZnOcHe2.js`.
+  - The chat chunk lazy-loads `/assets/stratumPDF-Bgc_chGe.js` and `/assets/pdf-vendor-B7fMFYQc.js`.
+  - Live rendered smoke intercepted `/api/chat`, reached an escalation state, showed `Download Summary`, generated an `edstratum-intake-...pdf` download, and produced no console errors or live notification traffic.
 
 ## Notes For Future Agents
 
@@ -74,6 +79,7 @@ Earlier notes that the frontend source was missing are now superseded. The sourc
 - Backend commit `3272b67` accepts optional `escalationTrigger` and `sentimentSignal` on `/api/chat` requests, preserves them through the graph state, and records `sentiment_signal` in non-secret escalation key signals.
 - Backend commit `fdb357a` adds the ElevenLabs TTS proxy contract at `/api/tts` and `/tts`, guarded by Railway-side `ELEVENLABS_API_KEY` and session-scoped rate limiting.
 - Frontend commit `e079033` adds voice input and TTS UI, gated by Cloudflare runtime `voiceEnabled` plus build-time `VITE_TTS_ENABLED`.
+- Frontend commit `395d0b8` adds client-side PDF session snapshots, lazy-loaded PDF renderer chunks, and download UI after readiness completion or escalation.
 
 ## Completed Feature 1
 
@@ -110,6 +116,13 @@ Earlier notes that the frontend source was missing are now superseded. The sourc
 - Backend commit `fdb357a` is pushed to `main`; frontend commit `e079033` is pushed to `main` and loaded in production as `/assets/StratumChat-CzklqdIB.js`.
 - Local QA passed on 2026-07-20: backend pytest (`123 passed, 1 skipped`), backend focused TTS/health/escalation/LLM tests (`9 passed`), frontend `npm run lint`, frontend `npm run build`, `npx wrangler pages functions build`, focused voice tests (`14 passed`), and full frontend suite (`98 passed`).
 - Hosted main CI passed on 2026-07-20 with `98 passed`; production QA used safe paths only: no live TTS generation, `/api/tts` validation-only check returned 422, `/api/config` leaves `voiceEnabled: false`, and rendered production chat shows no voice controls while disabled.
+
+## Completed Feature 7
+
+- Enhancement spec Feature 7 is deployed on the frontend Cloudflare Pages project: client-side `@react-pdf/renderer` session summary generation, completion/escalation-gated `Download Summary` UI, no server round-trip for PDF generation, and `tests/pdf-snapshot.spec.ts`.
+- Frontend commit `395d0b8` is pushed to `main` and loaded in production as `/assets/StratumChat-DZnOcHe2.js`, with lazy PDF chunks `/assets/stratumPDF-Bgc_chGe.js` and `/assets/pdf-vendor-B7fMFYQc.js`; backend code was not changed for this feature.
+- Local QA passed on 2026-07-20: frontend `npm run lint`, frontend `npm run build`, `npx wrangler pages functions build`, no client `fs`/`path`/`crypto` imports, focused PDF tests (`12 passed`), and full frontend suite (`110 passed`).
+- Hosted branch and main CI passed on 2026-07-20 with `110 passed`; production QA used safe paths only by intercepting `/api/chat`, verifying the PDF download control and generated PDF without triggering live escalation/email delivery.
 
 ## Recommended Next Steps
 
