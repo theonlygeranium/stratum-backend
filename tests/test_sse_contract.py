@@ -8,6 +8,7 @@ import pytest
 from fastapi.testclient import TestClient
 from pydantic import ValidationError
 
+from app.escalation import detect_direct_trigger
 from app.graph import (
     build_stratum_graph,
     initial_state_from_request,
@@ -660,6 +661,28 @@ def test_direct_trigger_routes_without_losing_request_mode() -> None:
     assert route_key(state) == "escalation"
     assert state["escalation_trigger"] == "explicit"
     assert request_from_state(state).mode == "open"
+
+
+@pytest.mark.parametrize(
+    ("text", "expected"),
+    [
+        ("I want to start a project and talk to Jeffrey.", "explicit"),
+        ("Please connect me with the founder.", "explicit"),
+        ("How much does this cost?", "explicit"),
+        ("Can I talk to a real person?", "explicit"),
+        ("Can I talk to a human?", "sentiment"),
+        ("This is useless.", "sentiment"),
+        ("Is EdStratum founder-led?", None),
+        ("Who is Jeffrey and what is his methodology?", None),
+        ("What is the cost model for RAG evaluation?", None),
+        ("How should pricing data feed an ROI model?", None),
+    ],
+)
+def test_direct_trigger_uses_phrase_level_escalation(
+    text: str,
+    expected: str | None,
+) -> None:
+    assert detect_direct_trigger(text) == expected
 
 
 def test_agent_uses_compiled_langgraph_runtime() -> None:

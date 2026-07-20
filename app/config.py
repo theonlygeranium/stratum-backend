@@ -50,6 +50,7 @@ def get_settings() -> Settings:
         chroma_dir = root / chroma_dir
 
     openai_api_key = os.getenv("OPENAI_API_KEY") or None
+    cohere_api_key = os.getenv("COHERE_API_KEY") or None
 
     return Settings(
         allowed_origins=_split_csv(origins),
@@ -60,16 +61,19 @@ def get_settings() -> Settings:
         knowledge_base_dir=kb_dir,
         escalation_log_dir=log_dir,
         database_url=os.getenv("DATABASE_URL") or None,
-        embedding_provider=os.getenv(
-            "EMBEDDING_PROVIDER",
-            "openai" if openai_api_key else "hash",
+        embedding_provider=(
+            os.getenv("EMBEDDING_PROVIDER")
+            or ("openai" if openai_api_key else "hash")
         ),
         embedding_model=os.getenv("EMBEDDING_MODEL", "text-embedding-3-small"),
         vector_store_provider=os.getenv("VECTOR_STORE_PROVIDER", "chroma"),
         chroma_persist_dir=chroma_dir,
-        reranker_provider=os.getenv("RERANKER_PROVIDER", "heuristic"),
+        reranker_provider=(
+            os.getenv("RERANKER_PROVIDER")
+            or ("cohere" if cohere_api_key else "heuristic")
+        ),
         reranker_model=os.getenv("RERANKER_MODEL", "rerank-v4.0-fast"),
-        cohere_api_key=os.getenv("COHERE_API_KEY") or None,
+        cohere_api_key=cohere_api_key,
         # LLM provider — configurable via env vars.
         # Defaults to OpenAI (api.openai.com / gpt-4o).
         # Set LLM_API_KEY + LLM_BASE_URL + LLM_MODEL to swap to

@@ -14,17 +14,16 @@ from app.models import ChatMessage, ChatRequest, ReadinessSnapshot
 
 
 EXPLICIT_KEYWORDS = [
-    "jeffrey",
-    "founder",
-    "human",
-    "real person",
     "talk to jeffrey",
     "connect me with the founder",
     "i want to start a project",
     "speak to jeffrey",
     "connect me with jeffrey",
-    "contact me",
-    "contact you",
+    "connect with jeffrey",
+    "talk to a real person",
+    "speak to a real person",
+    "connect me with a real person",
+    "connect me to a real person",
     "get in touch",
     "schedule a call",
     "schedule a meeting",
@@ -33,7 +32,6 @@ EXPLICIT_KEYWORDS = [
     "set up a call",
     "set up a meeting",
     "can someone contact",
-    "reach out",
     "reach out to me",
     "reach out to you",
     "how do i contact",
@@ -52,17 +50,16 @@ EXPLICIT_KEYWORDS = [
     "free consultation",
     "discovery call",
     "initial call",
-    "consultation",
-    "hire",
     "hire you",
+    "hire edstratum",
     "work with you",
     "work with edstratum",
-    "engage",
     "engage edstratum",
-    "pricing",
     "how much",
     "what does it cost",
-    "cost",
+    "how much does this cost",
+    "pricing for this",
+    "pricing for an engagement",
     "quote",
     "get a quote",
 ]
@@ -89,10 +86,10 @@ def last_user_text(messages: list[ChatMessage]) -> str:
 
 def detect_direct_trigger(text: str) -> str | None:
     lowered = text.lower()
-    if any(_contains_keyword(lowered, keyword) for keyword in EXPLICIT_KEYWORDS):
-        return "explicit"
     if any(_contains_keyword(lowered, keyword) for keyword in FRUSTRATION_KEYWORDS):
         return "sentiment"
+    if any(_contains_keyword(lowered, keyword) for keyword in EXPLICIT_KEYWORDS):
+        return "explicit"
     return None
 
 

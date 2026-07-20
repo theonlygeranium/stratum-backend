@@ -51,11 +51,13 @@ Useful optional variables:
 
 - `CONFIDENCE_THRESHOLD`: default `0.55`.
 - `CALENDLY_URL`: direct booking URL.
-- `EMBEDDING_PROVIDER`: `hash` for deterministic local/demo embeddings, or `openai`.
+- `EMBEDDING_PROVIDER`: leave unset/blank for auto mode (`openai` when
+  `OPENAI_API_KEY` is present, otherwise `hash`), or set explicitly.
 - `EMBEDDING_MODEL`: default `text-embedding-3-small`.
 - `VECTOR_STORE_PROVIDER`: `chroma` by default, falling back to memory if Chroma is unavailable.
 - `CHROMA_PERSIST_DIR`: optional path for persistent local Chroma storage.
-- `RERANKER_PROVIDER`: `heuristic` for demo/local, or `cohere` to use Cohere's rerank API when `COHERE_API_KEY` is configured.
+- `RERANKER_PROVIDER`: leave unset/blank for auto mode (`cohere` when
+  `COHERE_API_KEY` is present, otherwise `heuristic`), or set explicitly.
 - `RERANKER_MODEL`: default `rerank-v4.0-fast`.
 
 ## Verification
