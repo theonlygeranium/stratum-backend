@@ -16,9 +16,9 @@ Earlier notes that the frontend source was missing are now superseded. The sourc
 - Site: `https://edstratumlabs.ai`
 - Cloudflare Pages project: `edstratumlabs`
 - Cloudflare source: GitHub repo `theonlygeranium/edstratum-v2-frontend`
-- Latest frontend production code commit verified: `e1ff6d6`
-- Current production entry asset: `/assets/index-Ozo3qdmX.js`
-- Current STRATUM chat asset: `/assets/StratumChat-BwzZIuCC.js`
+- Latest frontend production code-bearing commit verified: `3904989`
+- Current production entry asset: `/assets/index-BQPzEWy3.js`
+- Current STRATUM chat asset: `/assets/StratumChat-Dc9NE68U.js`
 - Current PDF snapshot assets: `/assets/stratumPDF-Bgc_chGe.js`, `/assets/pdf-vendor-B7fMFYQc.js`
 - Backend: `https://stratum-backend-production-a340.up.railway.app`
 - Latest backend main source commit pushed: `bfb1987`
@@ -60,7 +60,7 @@ Earlier notes that the frontend source was missing are now superseded. The sourc
   - Live backend `/api/tts` enforces the 500-character request contract; validation-only QA returned HTTP 422 without invoking the provider.
   - Live rendered chat smoke verified zero voice playback or mic controls appear while the runtime flag remains disabled.
 - PDF snapshot download deployed:
-  - Live production loads frontend commit `e1ff6d6` through `/assets/index-Ozo3qdmX.js` and `/assets/StratumChat-BwzZIuCC.js`.
+  - Live production loads frontend code-bearing commit `3904989` through `/assets/index-BQPzEWy3.js` and `/assets/StratumChat-Dc9NE68U.js`.
   - The chat chunk lazy-loads `/assets/stratumPDF-Bgc_chGe.js` and `/assets/pdf-vendor-B7fMFYQc.js`.
   - Live rendered smoke intercepted `/api/chat`, reached an escalation state, showed `Download Summary`, generated an `edstratum-intake-...pdf` download, and produced no console errors or live notification traffic.
 - SOT QA gate update:
@@ -74,6 +74,10 @@ Earlier notes that the frontend source was missing are now superseded. The sourc
   - Production `https://edstratumlabs.ai/api/escalate` with `X-Stratum-QA: true` returned `200` and `status: "suppressed"` without a live notification.
   - Production `https://edstratumlabs.ai/api/tts` returned Railway validation `422` for an invalid payload and `503 tts_not_configured` for a valid validation-only payload, confirming the same-origin proxy reaches Railway without invoking ElevenLabs.
   - Backend source commit `bfb1987` streams ElevenLabs provider bytes through FastAPI `StreamingResponse`; local backend pytest passed with `123 passed, 1 skipped`.
+- Browser TTS playback update:
+  - Frontend commit `3904989` streams successful `/api/tts` responses through MediaSource/Web Audio when supported and retains buffered `arrayBuffer()` decode playback as a fallback.
+  - Local frontend QA passed on 2026-07-20: `npm run type-check`, `npm run lint`, `npm run build`, `npx wrangler pages functions build`, focused voice browser tests (`16 passed`), and full Playwright suite (`122 passed`).
+  - Hosted main CI `29731627328` passed with `122 passed`, Cloudflare Pages deployed `/assets/index-BQPzEWy3.js` and `/assets/StratumChat-Dc9NE68U.js`, live `/api/config` still returns `voiceEnabled: false`, and rendered production smoke verified zero voice controls plus zero TTS requests while disabled.
 
 ## Notes For Future Agents
 
@@ -93,15 +97,15 @@ Earlier notes that the frontend source was missing are now superseded. The sourc
 - Frontend commit `e079033` adds voice input and TTS UI, gated by Cloudflare runtime `voiceEnabled` plus build-time `VITE_TTS_ENABLED`.
 - Frontend commit `395d0b8` adds client-side PDF session snapshots, lazy-loaded PDF renderer chunks, and download UI after readiness completion or escalation.
 - Frontend commit `e1ff6d6` adds same-origin Cloudflare proxy routes for `/api/escalate` and `/api/tts`; backend commit `bfb1987` streams TTS provider bytes instead of buffering the complete provider response first.
+- Frontend commit `3904989` streams browser TTS playback through MediaSource where supported, with the buffered decode path retained for unsupported browsers.
 
 ## Current SOT Blockers
 
 - GitHub branch protection for frontend `main` is not configured to require `CI / build-and-test`; this is still a release-governance blocker. A GitHub API attempt on 2026-07-20 returned HTTP 403 requiring GitHub Pro or a public repository before branch protection can be enabled.
 - Cloudflare KV rate limiting is not active in production. Live rapid `/api/config` probes did not produce HTTP 429, and the middleware skips enforcement until `RATE_LIMIT` is bound.
 - Cloudflare D1 conversation persistence is not active. `/api/config` returns `persistenceEnabled: false`, and `/api/sessions/.../messages` returns `503 d1_not_configured`.
-- Voice/TTS is not active in production. `/api/config` returns `voiceEnabled: false`, and `/api/health` reports `tts.status: "unconfigured"`.
+- Voice/TTS is not active in production. `/api/config` returns `voiceEnabled: false`, `/api/health` reports `tts.status: "unconfigured"`, and live `/api/tts` returns `503 tts_not_configured` for a valid validation-only payload.
 - Backend runtime reports `embedding_provider: "hash"` and `vector_store_provider: "chroma"`; this is healthy for current RAG behavior but does not prove a Pinecone/OpenAI production path.
-- TTS backend now streams provider bytes, but browser playback still decodes after `response.arrayBuffer()` and does not yet use MediaSource/Web Audio streaming playback.
 - Wrangler and Railway CLI are unauthenticated in this shell, and no safe control-plane tokens are present, so Cloudflare bindings, Railway env vars, and exact deployment SHAs cannot be changed or verified from here.
 
 ## Completed Feature 1
@@ -135,10 +139,11 @@ Earlier notes that the frontend source was missing are now superseded. The sourc
 
 ## Completed Feature 6
 
-- Enhancement spec Feature 6 is deployed across frontend and backend: Web Speech API voice input, TTS playback toggle, markdown-stripped TTS payloads, reduced-motion guardrails, same-origin Cloudflare `/api/tts` proxying, and a FastAPI ElevenLabs proxy with streaming response, 500-character validation, plus 10-per-session/minute rate limiting.
+- Enhancement spec Feature 6 is deployed across frontend and backend: Web Speech API voice input, TTS playback toggle, markdown-stripped TTS payloads, reduced-motion guardrails, same-origin Cloudflare `/api/tts` proxying, browser MediaSource streaming playback with buffered fallback, and a FastAPI ElevenLabs proxy with streaming response, 500-character validation, plus 10-per-session/minute rate limiting.
 - Backend commit `fdb357a` is pushed to `main`; frontend commit `e079033` is pushed to `main` and loaded in production as `/assets/StratumChat-CzklqdIB.js`.
 - Local QA passed on 2026-07-20: backend pytest (`123 passed, 1 skipped`), backend focused TTS/health/escalation/LLM tests (`9 passed`), frontend `npm run lint`, frontend `npm run build`, `npx wrangler pages functions build`, focused voice/proxy tests (`44 passed`), and full frontend suite (`120 passed`).
 - Hosted main CI initially passed on 2026-07-20 with `98 passed`; current frontend main CI for same-origin proxy coverage passed with `120 passed`. Production QA used safe paths only: no live TTS generation, `/api/tts` validation-only checks returned 422/503, `/api/config` leaves `voiceEnabled: false`, and rendered production chat shows no voice controls while disabled.
+- Follow-up frontend QA for browser TTS streaming passed with `npm run type-check`, `npm run lint`, `npm run build`, `npx wrangler pages functions build`, focused voice browser tests (`16 passed`), full Playwright suite (`122 passed`), hosted main CI `29731627328` (`122 passed`), and Cloudflare Pages production success for code-bearing commit `3904989`.
 
 ## Completed Feature 7
 
