@@ -292,7 +292,7 @@ async def send_or_log_escalation(
                             "from": sender,
                             "to": [settings.jeffrey_email],
                             "subject": (
-                                "[EdStratum Labs] New Qualified Lead - "
+                                "[EdStratum Labs] New Qualified Lead — "
                                 f"{payload['timestamp']}"
                             ),
                             "html": format_email_html(payload),

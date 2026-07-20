@@ -634,7 +634,7 @@ def test_escalate_route_returns_safe_failure_without_config() -> None:
         },
     )
 
-    assert response.status_code == 200
+    assert response.status_code == 500
     assert response.json()["success"] is False
     assert response.json()["status"] == "prepared"
 

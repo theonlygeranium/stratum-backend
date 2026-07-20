@@ -5,7 +5,7 @@ from datetime import UTC, datetime
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import Response, StreamingResponse
+from fastapi.responses import JSONResponse, Response, StreamingResponse
 
 from app.agent import StratumAgent
 from app.config import get_settings
@@ -112,7 +112,7 @@ async def chat(request: ChatRequest, http_request: Request) -> StreamingResponse
 async def escalate(
     request: EscalationRequest,
     http_request: Request,
-) -> EscalationDelivery:
+) -> EscalationDelivery | JSONResponse:
     payload = {
         "conversation_transcript": "",
         "readiness_snapshot": {
@@ -131,11 +131,18 @@ async def escalate(
         "session_id": request.session_id,
         "timestamp": request.timestamp or datetime.now(UTC).isoformat(),
     }
-    return await send_or_log_escalation(
+    delivery = await send_or_log_escalation(
         settings,
         payload,
         suppress_notifications=_suppresses_notifications(http_request),
     )
+    if not delivery.success and delivery.status != "suppressed":
+        return JSONResponse(
+            status_code=500,
+            content=delivery.model_dump(by_alias=True),
+        )
+
+    return delivery
 
 
 def _tts_session_key(request: Request) -> str:

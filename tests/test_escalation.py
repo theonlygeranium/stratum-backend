@@ -42,6 +42,7 @@ def _settings(tmp_path: Path) -> Settings:
 
 def test_resend_sender_falls_back_to_default_sender(monkeypatch, tmp_path) -> None:
     calls: list[str] = []
+    subjects: list[str] = []
 
     class FakeResponse:
         def __init__(self, ok: bool):
@@ -67,6 +68,7 @@ def test_resend_sender_falls_back_to_default_sender(monkeypatch, tmp_path) -> No
         async def post(self, url: str, *, headers: dict, json: dict):
             del url, headers
             calls.append(json["from"])
+            subjects.append(json["subject"])
             return FakeResponse(ok=json["from"] == RESEND_FALLBACK_FROM_EMAIL)
 
     monkeypatch.setattr("app.escalation.httpx.AsyncClient", FakeClient)
@@ -91,6 +93,10 @@ def test_resend_sender_falls_back_to_default_sender(monkeypatch, tmp_path) -> No
     assert result.status == "sent"
     assert result.messageId == "resend-123"
     assert calls == ["stratum@example.com", RESEND_FALLBACK_FROM_EMAIL]
+    assert subjects == [
+        "[EdStratum Labs] New Qualified Lead — 2026-07-20T00:00:00+00:00",
+        "[EdStratum Labs] New Qualified Lead — 2026-07-20T00:00:00+00:00",
+    ]
     assert (tmp_path / "resend-fallback.json").exists()
 
 
