@@ -5,12 +5,14 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import shutil
 import subprocess
 import sys
 import time
 import urllib.error
 import urllib.request
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -27,6 +29,45 @@ DEFAULT_BACKEND_URL = "https://stratum-backend-production-a340.up.railway.app"
 FRONTEND_CI_CONTEXT = "CI / build-and-test"
 BACKEND_CI_CONTEXT = "Backend CI / pytest-and-rag"
 RAILWAY_STATUS_CONTEXT = "sunny-ambition - stratum-backend"
+DEFAULT_FRONTEND_FLAGS = {
+    "ragEnabled": True,
+    "voiceEnabled": False,
+    "persistenceEnabled": False,
+}
+DEFAULT_BACKEND_RUNTIME = {
+    "graph_runtime": "langgraph",
+    "session_store_backend": "postgres",
+    "embedding_provider": "hash",
+    "vector_store_provider": "chroma",
+    "llm_provider": "writer",
+}
+DEFAULT_BACKEND_TTS_STATUS = "unconfigured"
+FRONTEND_FLAG_ENV = {
+    "ragEnabled": "STRATUM_AUDIT_EXPECT_RAG_ENABLED",
+    "voiceEnabled": "STRATUM_AUDIT_EXPECT_VOICE_ENABLED",
+    "persistenceEnabled": "STRATUM_AUDIT_EXPECT_PERSISTENCE_ENABLED",
+}
+FRONTEND_FLAG_DESTS = {
+    "ragEnabled": "expected_rag_enabled",
+    "voiceEnabled": "expected_voice_enabled",
+    "persistenceEnabled": "expected_persistence_enabled",
+}
+BACKEND_RUNTIME_ENV = {
+    "graph_runtime": "STRATUM_AUDIT_EXPECT_GRAPH_RUNTIME",
+    "session_store_backend": "STRATUM_AUDIT_EXPECT_SESSION_STORE_BACKEND",
+    "embedding_provider": "STRATUM_AUDIT_EXPECT_EMBEDDING_PROVIDER",
+    "vector_store_provider": "STRATUM_AUDIT_EXPECT_VECTOR_STORE_PROVIDER",
+    "llm_provider": "STRATUM_AUDIT_EXPECT_LLM_PROVIDER",
+}
+BACKEND_TTS_STATUS_ENV = "STRATUM_AUDIT_EXPECT_TTS_STATUS"
+BACKEND_RUNTIME_ALLOWED_VALUES = {
+    "graph_runtime": {"langgraph", "procedural"},
+    "session_store_backend": {"postgres", "memory"},
+    "embedding_provider": {"hash", "openai"},
+    "vector_store_provider": {"chroma", "memory", "pinecone"},
+    "llm_provider": {"writer", "openai"},
+}
+BACKEND_TTS_STATUS_ALLOWED_VALUES = {"ok", "unconfigured"}
 
 
 @dataclass
@@ -34,6 +75,13 @@ class Record:
     level: str
     name: str
     detail: str = ""
+
+
+@dataclass(frozen=True)
+class RuntimeExpectations:
+    frontend_flags: dict[str, bool]
+    backend_runtime: dict[str, str]
+    backend_tts_status: str
 
 
 class Audit:
@@ -117,6 +165,105 @@ def fetch_json(
         text = exc.read().decode("utf-8", errors="replace")
     body = json.loads(text)
     return status, body, headers
+
+
+def parse_bool(value: str) -> bool:
+    normalized = value.strip().lower()
+    if normalized in {"1", "true", "t", "yes", "y", "on"}:
+        return True
+    if normalized in {"0", "false", "f", "no", "n", "off"}:
+        return False
+    raise ValueError("must be a boolean: true/false, yes/no, on/off, or 1/0")
+
+
+def argparse_bool(value: str) -> bool:
+    try:
+        return parse_bool(value)
+    except ValueError as exc:
+        raise argparse.ArgumentTypeError(str(exc)) from exc
+
+
+def validate_expected_backend_runtime(key: str, value: str) -> str:
+    normalized = value.strip().lower()
+    allowed = BACKEND_RUNTIME_ALLOWED_VALUES[key]
+    if normalized not in allowed:
+        expected = ", ".join(sorted(allowed))
+        raise ValueError(f"{key} must be one of: {expected}")
+    return normalized
+
+
+def validate_expected_tts_status(value: str) -> str:
+    normalized = value.strip().lower()
+    if normalized not in BACKEND_TTS_STATUS_ALLOWED_VALUES:
+        expected = ", ".join(sorted(BACKEND_TTS_STATUS_ALLOWED_VALUES))
+        raise ValueError(f"TTS status must be one of: {expected}")
+    return normalized
+
+
+def argparse_backend_runtime_value(key: str) -> Callable[[str], str]:
+    def parse(value: str) -> str:
+        try:
+            return validate_expected_backend_runtime(key, value)
+        except ValueError as exc:
+            raise argparse.ArgumentTypeError(str(exc)) from exc
+
+    return parse
+
+
+def argparse_tts_status(value: str) -> str:
+    try:
+        return validate_expected_tts_status(value)
+    except ValueError as exc:
+        raise argparse.ArgumentTypeError(str(exc)) from exc
+
+
+def expectations_from_args(args: argparse.Namespace, parser: argparse.ArgumentParser) -> RuntimeExpectations:
+    frontend_flags = dict(DEFAULT_FRONTEND_FLAGS)
+    for key, env_name in FRONTEND_FLAG_ENV.items():
+        raw = os.getenv(env_name)
+        if raw is None:
+            continue
+        try:
+            frontend_flags[key] = parse_bool(raw)
+        except ValueError as exc:
+            parser.error(f"{env_name}: {exc}")
+
+    backend_runtime = dict(DEFAULT_BACKEND_RUNTIME)
+    for key, env_name in BACKEND_RUNTIME_ENV.items():
+        raw = os.getenv(env_name)
+        if raw is None:
+            continue
+        try:
+            backend_runtime[key] = validate_expected_backend_runtime(key, raw)
+        except ValueError as exc:
+            parser.error(f"{env_name}: {exc}")
+
+    backend_tts_status = DEFAULT_BACKEND_TTS_STATUS
+    raw_tts_status = os.getenv(BACKEND_TTS_STATUS_ENV)
+    if raw_tts_status is not None:
+        try:
+            backend_tts_status = validate_expected_tts_status(raw_tts_status)
+        except ValueError as exc:
+            parser.error(f"{BACKEND_TTS_STATUS_ENV}: {exc}")
+
+    for key in FRONTEND_FLAG_ENV:
+        value = getattr(args, FRONTEND_FLAG_DESTS[key])
+        if value is not None:
+            frontend_flags[key] = value
+
+    for key in BACKEND_RUNTIME_ENV:
+        value = getattr(args, f"expected_{key}")
+        if value is not None:
+            backend_runtime[key] = value
+
+    if args.expected_tts_status is not None:
+        backend_tts_status = args.expected_tts_status
+
+    return RuntimeExpectations(
+        frontend_flags=frontend_flags,
+        backend_runtime=backend_runtime,
+        backend_tts_status=backend_tts_status,
+    )
 
 
 def first_annotation(check_run: dict[str, Any]) -> str:
@@ -235,6 +382,7 @@ def inspect_frontend_public(
     frontend_url: str,
     expected_sha: str | None,
     expected_backend_url: str,
+    expectations: RuntimeExpectations,
 ) -> None:
     manifest_url = f"{frontend_url}/build-manifest.json?release-audit={int(time.time())}"
     try:
@@ -294,12 +442,7 @@ def inspect_frontend_public(
     else:
         audit.blocked("frontend /api/config returns HTTP 200", str(config_status))
 
-    expected_flags = {
-        "ragEnabled": True,
-        "voiceEnabled": False,
-        "persistenceEnabled": False,
-    }
-    for key, expected in expected_flags.items():
+    for key, expected in expectations.frontend_flags.items():
         value = config.get(key)
         if value == expected:
             audit.ok(f"frontend runtime flag {key}", str(value).lower())
@@ -307,7 +450,11 @@ def inspect_frontend_public(
             audit.blocked(f"frontend runtime flag {key}", f"got {value!r}, expected {expected!r}")
 
 
-def inspect_backend_public(audit: Audit, backend_url: str) -> None:
+def inspect_backend_public(
+    audit: Audit,
+    backend_url: str,
+    expectations: RuntimeExpectations,
+) -> None:
     try:
         health_status, health, headers = fetch_json(
             f"{backend_url}/api/health",
@@ -329,10 +476,14 @@ def inspect_backend_public(audit: Audit, backend_url: str) -> None:
         audit.ok("backend RAG health", "ok vectorStoreConnected=true")
     else:
         audit.blocked("backend RAG health", json.dumps(health.get("rag"), sort_keys=True))
-    if health.get("tts", {}).get("status") == "unconfigured":
-        audit.ok("backend TTS remains fail-closed", "unconfigured")
+    tts_status = health.get("tts", {}).get("status")
+    if tts_status == expectations.backend_tts_status:
+        audit.ok("backend TTS status", str(tts_status))
     else:
-        audit.warn("backend TTS status", str(health.get("tts")))
+        audit.warn(
+            "backend TTS status",
+            f"got {tts_status!r}, expected {expectations.backend_tts_status!r}",
+        )
     if headers.get("access-control-allow-origin") == DEFAULT_FRONTEND_URL:
         audit.ok("backend production CORS origin", DEFAULT_FRONTEND_URL)
     else:
@@ -352,14 +503,7 @@ def inspect_backend_public(audit: Audit, backend_url: str) -> None:
     else:
         audit.blocked("backend /api/runtime returns HTTP 200", str(runtime_status))
 
-    expected_runtime = {
-        "graph_runtime": "langgraph",
-        "session_store_backend": "postgres",
-        "embedding_provider": "hash",
-        "vector_store_provider": "chroma",
-        "llm_provider": "writer",
-    }
-    for key, expected in expected_runtime.items():
+    for key, expected in expectations.backend_runtime.items():
         value = runtime.get(key)
         if value == expected:
             audit.ok(f"backend runtime {key}", str(value))
@@ -436,7 +580,7 @@ def summarize_conversation_matrix(report: dict[str, Any] | None) -> dict[str, An
     }
 
 
-def parse_args() -> argparse.Namespace:
+def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description=(
             "Audit STRATUM public release state and GitHub governance without mutating "
@@ -464,12 +608,86 @@ def parse_args() -> argparse.Namespace:
         type=int,
         help="Debug-only cap for the conversation matrix; capped runs cannot satisfy the 50+ case SOT gate.",
     )
-    return parser.parse_args()
+    expectations = parser.add_argument_group("runtime expectations")
+    expectations.add_argument(
+        "--expected-rag-enabled",
+        dest="expected_rag_enabled",
+        type=argparse_bool,
+        metavar="{true,false}",
+        help=f"Expected frontend /api/config ragEnabled value. Env: {FRONTEND_FLAG_ENV['ragEnabled']}.",
+    )
+    expectations.add_argument(
+        "--expected-voice-enabled",
+        dest="expected_voice_enabled",
+        type=argparse_bool,
+        metavar="{true,false}",
+        help=f"Expected frontend /api/config voiceEnabled value. Env: {FRONTEND_FLAG_ENV['voiceEnabled']}.",
+    )
+    expectations.add_argument(
+        "--expected-persistence-enabled",
+        dest="expected_persistence_enabled",
+        type=argparse_bool,
+        metavar="{true,false}",
+        help=(
+            "Expected frontend /api/config persistenceEnabled value. "
+            f"Env: {FRONTEND_FLAG_ENV['persistenceEnabled']}."
+        ),
+    )
+    expectations.add_argument(
+        "--expected-graph-runtime",
+        type=argparse_backend_runtime_value("graph_runtime"),
+        metavar="{langgraph,procedural}",
+        help=f"Expected backend /api/runtime graph_runtime. Env: {BACKEND_RUNTIME_ENV['graph_runtime']}.",
+    )
+    expectations.add_argument(
+        "--expected-session-store-backend",
+        type=argparse_backend_runtime_value("session_store_backend"),
+        metavar="{memory,postgres}",
+        help=(
+            "Expected backend /api/runtime session_store_backend. "
+            f"Env: {BACKEND_RUNTIME_ENV['session_store_backend']}."
+        ),
+    )
+    expectations.add_argument(
+        "--expected-embedding-provider",
+        type=argparse_backend_runtime_value("embedding_provider"),
+        metavar="{hash,openai}",
+        help=(
+            "Expected backend /api/runtime embedding_provider. "
+            f"Env: {BACKEND_RUNTIME_ENV['embedding_provider']}."
+        ),
+    )
+    expectations.add_argument(
+        "--expected-vector-store-provider",
+        type=argparse_backend_runtime_value("vector_store_provider"),
+        metavar="{chroma,memory,pinecone}",
+        help=(
+            "Expected backend /api/runtime vector_store_provider. "
+            f"Env: {BACKEND_RUNTIME_ENV['vector_store_provider']}."
+        ),
+    )
+    expectations.add_argument(
+        "--expected-llm-provider",
+        type=argparse_backend_runtime_value("llm_provider"),
+        metavar="{openai,writer}",
+        help=f"Expected backend /api/runtime llm_provider. Env: {BACKEND_RUNTIME_ENV['llm_provider']}.",
+    )
+    expectations.add_argument(
+        "--expected-tts-status",
+        type=argparse_tts_status,
+        metavar="{ok,unconfigured}",
+        help=f"Expected backend /api/health tts.status. Env: {BACKEND_TTS_STATUS_ENV}.",
+    )
+
+    args = parser.parse_args(argv)
+    args.expectations = expectations_from_args(args, parser)
+    return args
 
 
 def main() -> int:
     args = parse_args()
     audit = Audit()
+    expectations: RuntimeExpectations = args.expectations
 
     frontend_url = args.frontend_url.rstrip("/")
     backend_url = args.backend_url.rstrip("/")
@@ -496,9 +714,9 @@ def main() -> int:
             inspect_check_run(audit, args.backend_repo, backend_sha, "Pytest & RAG eval")
 
     print()
-    inspect_frontend_public(audit, frontend_url, frontend_sha, backend_url)
+    inspect_frontend_public(audit, frontend_url, frontend_sha, backend_url, expectations)
     print()
-    inspect_backend_public(audit, backend_url)
+    inspect_backend_public(audit, backend_url, expectations)
     conversation_matrix: dict[str, Any] | None = None
     if args.include_conversation_matrix:
         print()
@@ -518,6 +736,11 @@ def main() -> int:
                 "frontendMain": frontend_sha[:7] if frontend_sha else None,
                 "backendMain": backend_sha[:7] if backend_sha else None,
                 "conversationMatrix": summarize_conversation_matrix(conversation_matrix),
+                "expectations": {
+                    "frontendFlags": expectations.frontend_flags,
+                    "backendRuntime": expectations.backend_runtime,
+                    "backendTtsStatus": expectations.backend_tts_status,
+                },
                 "warnings": audit.warnings,
                 "blockers": audit.blockers,
             },

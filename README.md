@@ -124,6 +124,31 @@ flags, Railway deployment status, and backend health/runtime. It reports only
 safe metadata and exits nonzero while governance or control-plane blockers
 remain.
 
+Expected frontend flags and backend runtime providers default to the current
+production posture: `ragEnabled=true`, `voiceEnabled=false`,
+`persistenceEnabled=false`, `graph_runtime=langgraph`,
+`session_store_backend=postgres`, `embedding_provider=hash`,
+`vector_store_provider=chroma`, `llm_provider=writer`, and
+`tts.status=unconfigured`. During a planned runtime rollout, override those
+expectations with CLI flags such as:
+
+```bash
+.venv/bin/python scripts/live_release_audit.py \
+  --expected-voice-enabled true \
+  --expected-embedding-provider openai \
+  --expected-vector-store-provider pinecone
+```
+
+The same expectations can be supplied through non-secret env vars:
+`STRATUM_AUDIT_EXPECT_RAG_ENABLED`, `STRATUM_AUDIT_EXPECT_VOICE_ENABLED`,
+`STRATUM_AUDIT_EXPECT_PERSISTENCE_ENABLED`,
+`STRATUM_AUDIT_EXPECT_GRAPH_RUNTIME`,
+`STRATUM_AUDIT_EXPECT_SESSION_STORE_BACKEND`,
+`STRATUM_AUDIT_EXPECT_EMBEDDING_PROVIDER`,
+`STRATUM_AUDIT_EXPECT_VECTOR_STORE_PROVIDER`,
+`STRATUM_AUDIT_EXPECT_LLM_PROVIDER`, and
+`STRATUM_AUDIT_EXPECT_TTS_STATUS`.
+
 To include the safe deployed Phase 4 matrix from the original SOT, add:
 
 ```bash
