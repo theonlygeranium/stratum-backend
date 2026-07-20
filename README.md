@@ -126,7 +126,7 @@ remain.
 
 Expected frontend flags and backend runtime providers default to the current
 production posture: `ragEnabled=true`, `voiceEnabled=false`,
-`persistenceEnabled=false`, `graph_runtime=langgraph`,
+`persistenceEnabled=false`, `maxIntakeQuestions=7`, `graph_runtime=langgraph`,
 `session_store_backend=postgres`, `embedding_provider=hash`,
 `vector_store_provider=chroma`, `llm_provider=writer`, and
 `tts.status=unconfigured`. During a planned runtime rollout, override those
@@ -135,6 +135,7 @@ expectations with CLI flags such as:
 ```bash
 .venv/bin/python scripts/live_release_audit.py \
   --expected-voice-enabled true \
+  --expected-max-intake-questions 7 \
   --expected-embedding-provider openai \
   --expected-vector-store-provider pinecone
 ```
@@ -142,6 +143,7 @@ expectations with CLI flags such as:
 The same expectations can be supplied through non-secret env vars:
 `STRATUM_AUDIT_EXPECT_RAG_ENABLED`, `STRATUM_AUDIT_EXPECT_VOICE_ENABLED`,
 `STRATUM_AUDIT_EXPECT_PERSISTENCE_ENABLED`,
+`STRATUM_AUDIT_EXPECT_MAX_INTAKE_QUESTIONS`,
 `STRATUM_AUDIT_EXPECT_GRAPH_RUNTIME`,
 `STRATUM_AUDIT_EXPECT_SESSION_STORE_BACKEND`,
 `STRATUM_AUDIT_EXPECT_EMBEDDING_PROVIDER`,

@@ -8,6 +8,7 @@ from scripts import live_release_audit
 def clear_expectation_env(monkeypatch: pytest.MonkeyPatch) -> None:
     for env_name in live_release_audit.FRONTEND_FLAG_ENV.values():
         monkeypatch.delenv(env_name, raising=False)
+    monkeypatch.delenv(live_release_audit.FRONTEND_MAX_INTAKE_QUESTIONS_ENV, raising=False)
     for env_name in live_release_audit.BACKEND_RUNTIME_ENV.values():
         monkeypatch.delenv(env_name, raising=False)
     monkeypatch.delenv(live_release_audit.BACKEND_TTS_STATUS_ENV, raising=False)
@@ -26,6 +27,7 @@ def test_release_audit_expectations_default_to_current_runtime(
             "voiceEnabled": False,
             "persistenceEnabled": False,
         },
+        frontend_max_intake_questions=7,
         backend_runtime={
             "graph_runtime": "langgraph",
             "session_store_backend": "postgres",
@@ -42,6 +44,7 @@ def test_release_audit_expectation_cli_overrides_env(
 ) -> None:
     clear_expectation_env(monkeypatch)
     monkeypatch.setenv("STRATUM_AUDIT_EXPECT_VOICE_ENABLED", "true")
+    monkeypatch.setenv("STRATUM_AUDIT_EXPECT_MAX_INTAKE_QUESTIONS", "6")
     monkeypatch.setenv("STRATUM_AUDIT_EXPECT_EMBEDDING_PROVIDER", "hash")
 
     args = live_release_audit.parse_args(
@@ -49,6 +52,8 @@ def test_release_audit_expectation_cli_overrides_env(
             "--skip-github",
             "--expected-voice-enabled",
             "false",
+            "--expected-max-intake-questions",
+            "7",
             "--expected-embedding-provider",
             "openai",
             "--expected-vector-store-provider",
@@ -59,6 +64,7 @@ def test_release_audit_expectation_cli_overrides_env(
     )
 
     assert args.expectations.frontend_flags["voiceEnabled"] is False
+    assert args.expectations.frontend_max_intake_questions == 7
     assert args.expectations.backend_runtime["embedding_provider"] == "openai"
     assert args.expectations.backend_runtime["vector_store_provider"] == "pinecone"
     assert args.expectations.backend_tts_status == "ok"
@@ -78,6 +84,19 @@ def test_release_audit_rejects_unsafe_provider_expectations(
     captured = capsys.readouterr()
     assert "sk-test-secret" not in captured.err
     assert "embedding_provider must be one of" in captured.err
+
+
+def test_release_audit_rejects_invalid_max_intake_expectation(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    clear_expectation_env(monkeypatch)
+
+    with pytest.raises(SystemExit):
+        live_release_audit.parse_args(["--skip-github", "--expected-max-intake-questions", "0"])
+
+    captured = capsys.readouterr()
+    assert "must be a positive integer" in captured.err
 
 
 def test_frontend_public_audit_uses_configured_flag_expectations(
@@ -106,6 +125,7 @@ def test_frontend_public_audit_uses_configured_flag_expectations(
                     "ragEnabled": True,
                     "voiceEnabled": True,
                     "persistenceEnabled": True,
+                    "maxIntakeQuestions": 7,
                 },
                 {},
             )
@@ -119,6 +139,7 @@ def test_frontend_public_audit_uses_configured_flag_expectations(
             "voiceEnabled": True,
             "persistenceEnabled": True,
         },
+        frontend_max_intake_questions=7,
         backend_runtime=dict(live_release_audit.DEFAULT_BACKEND_RUNTIME),
         backend_tts_status=live_release_audit.DEFAULT_BACKEND_TTS_STATUS,
     )
@@ -134,6 +155,67 @@ def test_frontend_public_audit_uses_configured_flag_expectations(
     assert audit.blockers == 0
     assert any(
         record.name == "frontend runtime flag voiceEnabled" and record.detail == "true"
+        for record in audit.records
+    )
+    assert any(
+        record.name == "frontend runtime maxIntakeQuestions" and record.detail == "7"
+        for record in audit.records
+    )
+
+
+def test_frontend_public_audit_blocks_stale_max_intake_questions(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def fake_fetch_json(
+        url: str,
+        timeout: float = 15.0,
+        headers: dict[str, str] | None = None,
+    ) -> tuple[int, dict[str, object], dict[str, str]]:
+        if "build-manifest.json" in url:
+            return (
+                200,
+                {
+                    "commitShortSha": "abc1234",
+                    "commitSha": "abc1234def",
+                    "backendUrl": live_release_audit.DEFAULT_BACKEND_URL,
+                    "assets": [f"/assets/{index}.js" for index in range(5)],
+                },
+                {"cache-control": "public, max-age=60, must-revalidate"},
+            )
+        if url.endswith("/api/config"):
+            return (
+                200,
+                {
+                    "ragEnabled": True,
+                    "voiceEnabled": False,
+                    "persistenceEnabled": False,
+                    "maxIntakeQuestions": 6,
+                },
+                {},
+            )
+        raise AssertionError(f"unexpected URL: {url}")
+
+    monkeypatch.setattr(live_release_audit, "fetch_json", fake_fetch_json)
+    audit = live_release_audit.Audit()
+    expectations = live_release_audit.RuntimeExpectations(
+        frontend_flags=dict(live_release_audit.DEFAULT_FRONTEND_FLAGS),
+        frontend_max_intake_questions=7,
+        backend_runtime=dict(live_release_audit.DEFAULT_BACKEND_RUNTIME),
+        backend_tts_status=live_release_audit.DEFAULT_BACKEND_TTS_STATUS,
+    )
+
+    live_release_audit.inspect_frontend_public(
+        audit,
+        live_release_audit.DEFAULT_FRONTEND_URL,
+        "abc1234def",
+        live_release_audit.DEFAULT_BACKEND_URL,
+        expectations,
+    )
+
+    assert audit.blockers == 1
+    assert any(
+        record.name == "frontend runtime maxIntakeQuestions"
+        and record.detail == "got 6, expected 7"
         for record in audit.records
     )
 
@@ -183,6 +265,7 @@ def test_backend_public_audit_uses_configured_provider_expectations(
     backend_runtime["vector_store_provider"] = "pinecone"
     expectations = live_release_audit.RuntimeExpectations(
         frontend_flags=dict(live_release_audit.DEFAULT_FRONTEND_FLAGS),
+        frontend_max_intake_questions=live_release_audit.DEFAULT_FRONTEND_MAX_INTAKE_QUESTIONS,
         backend_runtime=backend_runtime,
         backend_tts_status="ok",
     )

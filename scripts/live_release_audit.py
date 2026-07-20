@@ -34,6 +34,7 @@ DEFAULT_FRONTEND_FLAGS = {
     "voiceEnabled": False,
     "persistenceEnabled": False,
 }
+DEFAULT_FRONTEND_MAX_INTAKE_QUESTIONS = 7
 DEFAULT_BACKEND_RUNTIME = {
     "graph_runtime": "langgraph",
     "session_store_backend": "postgres",
@@ -52,6 +53,7 @@ FRONTEND_FLAG_DESTS = {
     "voiceEnabled": "expected_voice_enabled",
     "persistenceEnabled": "expected_persistence_enabled",
 }
+FRONTEND_MAX_INTAKE_QUESTIONS_ENV = "STRATUM_AUDIT_EXPECT_MAX_INTAKE_QUESTIONS"
 BACKEND_RUNTIME_ENV = {
     "graph_runtime": "STRATUM_AUDIT_EXPECT_GRAPH_RUNTIME",
     "session_store_backend": "STRATUM_AUDIT_EXPECT_SESSION_STORE_BACKEND",
@@ -80,6 +82,7 @@ class Record:
 @dataclass(frozen=True)
 class RuntimeExpectations:
     frontend_flags: dict[str, bool]
+    frontend_max_intake_questions: int
     backend_runtime: dict[str, str]
     backend_tts_status: str
 
@@ -183,6 +186,23 @@ def argparse_bool(value: str) -> bool:
         raise argparse.ArgumentTypeError(str(exc)) from exc
 
 
+def parse_positive_int(value: str) -> int:
+    try:
+        parsed = int(value.strip())
+    except ValueError as exc:
+        raise ValueError("must be a positive integer") from exc
+    if parsed < 1:
+        raise ValueError("must be a positive integer")
+    return parsed
+
+
+def argparse_positive_int(value: str) -> int:
+    try:
+        return parse_positive_int(value)
+    except ValueError as exc:
+        raise argparse.ArgumentTypeError(str(exc)) from exc
+
+
 def validate_expected_backend_runtime(key: str, value: str) -> str:
     normalized = value.strip().lower()
     allowed = BACKEND_RUNTIME_ALLOWED_VALUES[key]
@@ -228,6 +248,14 @@ def expectations_from_args(args: argparse.Namespace, parser: argparse.ArgumentPa
         except ValueError as exc:
             parser.error(f"{env_name}: {exc}")
 
+    frontend_max_intake_questions = DEFAULT_FRONTEND_MAX_INTAKE_QUESTIONS
+    raw_max_intake_questions = os.getenv(FRONTEND_MAX_INTAKE_QUESTIONS_ENV)
+    if raw_max_intake_questions is not None:
+        try:
+            frontend_max_intake_questions = parse_positive_int(raw_max_intake_questions)
+        except ValueError as exc:
+            parser.error(f"{FRONTEND_MAX_INTAKE_QUESTIONS_ENV}: {exc}")
+
     backend_runtime = dict(DEFAULT_BACKEND_RUNTIME)
     for key, env_name in BACKEND_RUNTIME_ENV.items():
         raw = os.getenv(env_name)
@@ -251,6 +279,9 @@ def expectations_from_args(args: argparse.Namespace, parser: argparse.ArgumentPa
         if value is not None:
             frontend_flags[key] = value
 
+    if args.expected_max_intake_questions is not None:
+        frontend_max_intake_questions = args.expected_max_intake_questions
+
     for key in BACKEND_RUNTIME_ENV:
         value = getattr(args, f"expected_{key}")
         if value is not None:
@@ -261,6 +292,7 @@ def expectations_from_args(args: argparse.Namespace, parser: argparse.ArgumentPa
 
     return RuntimeExpectations(
         frontend_flags=frontend_flags,
+        frontend_max_intake_questions=frontend_max_intake_questions,
         backend_runtime=backend_runtime,
         backend_tts_status=backend_tts_status,
     )
@@ -449,6 +481,15 @@ def inspect_frontend_public(
         else:
             audit.blocked(f"frontend runtime flag {key}", f"got {value!r}, expected {expected!r}")
 
+    max_intake_questions = config.get("maxIntakeQuestions")
+    if max_intake_questions == expectations.frontend_max_intake_questions:
+        audit.ok("frontend runtime maxIntakeQuestions", str(max_intake_questions))
+    else:
+        audit.blocked(
+            "frontend runtime maxIntakeQuestions",
+            f"got {max_intake_questions!r}, expected {expectations.frontend_max_intake_questions!r}",
+        )
+
 
 def inspect_backend_public(
     audit: Audit,
@@ -634,6 +675,15 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
         ),
     )
     expectations.add_argument(
+        "--expected-max-intake-questions",
+        type=argparse_positive_int,
+        metavar="N",
+        help=(
+            "Expected frontend /api/config maxIntakeQuestions value. "
+            f"Env: {FRONTEND_MAX_INTAKE_QUESTIONS_ENV}."
+        ),
+    )
+    expectations.add_argument(
         "--expected-graph-runtime",
         type=argparse_backend_runtime_value("graph_runtime"),
         metavar="{langgraph,procedural}",
@@ -738,6 +788,7 @@ def main() -> int:
                 "conversationMatrix": summarize_conversation_matrix(conversation_matrix),
                 "expectations": {
                     "frontendFlags": expectations.frontend_flags,
+                    "frontendMaxIntakeQuestions": expectations.frontend_max_intake_questions,
                     "backendRuntime": expectations.backend_runtime,
                     "backendTtsStatus": expectations.backend_tts_status,
                 },
