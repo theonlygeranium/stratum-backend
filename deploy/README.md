@@ -35,6 +35,40 @@ For Railway, an operator with access still needs to install/authenticate the Rai
 
 For Fly.io, an operator with access still needs `flyctl`, app ownership or creation rights, secrets for production environment variables, and DNS/subdomain setup for the chosen backend URL.
 
+## Emergency Railway Direct Deploy
+
+Use the GitHub-connected Railway source deploy for normal releases. If GitHub
+Actions usage limits or GitHub source automation block an urgent backend
+release, deploy the current backend source tree directly from this repo:
+
+```bash
+CONFIRM_DIRECT_RAILWAY_DEPLOY=yes \
+./scripts/railway_direct_deploy.sh
+```
+
+Useful non-secret overrides:
+
+```bash
+RAILWAY_PROJECT_ID=<project-id> \
+RAILWAY_SERVICE_NAME=stratum-backend \
+RAILWAY_ENVIRONMENT=production \
+DEPLOY_MESSAGE="Emergency direct deploy: <short reason>" \
+CONFIRM_DIRECT_RAILWAY_DEPLOY=yes \
+./scripts/railway_direct_deploy.sh
+```
+
+The helper refuses to run without confirmation, refuses dirty local source
+unless `ALLOW_DIRTY_DIRECT_DEPLOY=yes` is set, runs `railway up` against the
+current directory, polls `railway deployment list` until terminal success or
+failure, and then runs the safe live backend smoke. A dry run is available:
+
+```bash
+CONFIRM_DIRECT_RAILWAY_DEPLOY=yes DRY_RUN=1 ./scripts/railway_direct_deploy.sh
+```
+
+After any direct deploy, push or otherwise copy the deployed source back to
+GitHub so the repository remains the durable source of record.
+
 ## Cloudflare Frontend Wiring
 
 Use `scripts/set_cloudflare_pages_env.sh` only after the backend URL is live:

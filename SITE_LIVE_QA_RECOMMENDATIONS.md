@@ -165,6 +165,9 @@ Earlier notes that the frontend source was missing are now superseded. The sourc
   - Local backend QA passed on 2026-07-20: `python -m py_compile` for touched modules/scripts/tests, focused SSE/escalation/conversation-matrix tests (`104 passed, 1 skipped`), full pytest (`140 passed, 1 skipped`), RAG eval (`passed: true`, recall@10 `1.0`, groundedness proxy `1.0`), `git diff --check`, and targeted discretion scans.
   - Railway deployment status for `24d0b4b` returned `success`; post-deploy backend live smoke passed; frontend `EXPECTED_MANIFEST_COMMIT=7365bee npm run qa:live` passed through the same-origin proxy; and `scripts/live_release_audit.py --include-conversation-matrix --skip-github` passed with zero blockers, one expected GitHub-skip warning, and a 54-scenario matrix showing contract/expected/persona/no-hallucination/substance rates all `1.0`, scripted escalation rate `0.2037`, and first-token p95 `115.27ms`.
   - Hosted backend CI run `29752364513` did not start any workflow steps because of the GitHub account billing/spending-limit blocker.
+- Backend direct-deploy fallback update:
+  - Source now includes `scripts/railway_direct_deploy.sh`, a guarded Railway `railway up` fallback for urgent backend releases when GitHub-backed deployment automation is unavailable.
+  - The helper requires `CONFIRM_DIRECT_RAILWAY_DEPLOY=yes`, refuses dirty source unless `ALLOW_DIRTY_DIRECT_DEPLOY=yes` is set, polls `railway deployment list` until a terminal status, captures bounded failure logs under ignored `.railway/`, and runs the safe live backend smoke after success.
 
 ## Notes For Future Agents
 
@@ -199,6 +202,7 @@ Earlier notes that the frontend source was missing are now superseded. The sourc
 - Backend commit `5793eee` adds `scripts/live_backend_smoke.py` for safe deployed API/RAG/runtime smoke, including an `X-Stratum-Eval` suppressed escalation contract check.
 - Backend commit `d45f4c9` adds `scripts/live_release_audit.py` for safe release-governance auditing across GitHub, Cloudflare, Railway, and public runtime endpoints.
 - Backend commit `406089f` adds the release-audit conversation-matrix gate, stricter answer-substance checks, and a graph SSE empty-stream fallback regression. Backend commit `ac6a69a` adds configurable release-audit runtime expectations for planned provider/flag rollouts. Backend commit `178124e` adds an explicit release-audit gate for the seven-question frontend intake contract.
+- `scripts/railway_direct_deploy.sh` is the backend emergency direct-deploy fallback. Use it only when the normal GitHub-connected Railway path is blocked, and copy/push the deployed source back to GitHub afterward.
 
 ## Current SOT Blockers
 
@@ -266,6 +270,6 @@ Earlier notes that the frontend source was missing are now superseded. The sourc
 7. Activate managed RAG providers only after staging smoke: set Railway `EMBEDDING_PROVIDER=openai`, `VECTOR_STORE_PROVIDER=pinecone`, `PINECONE_API_KEY`, `PINECONE_INDEX`, optional `PINECONE_NAMESPACE`, then verify `/api/runtime` reports `openai`/`pinecone` and RAG eval remains above threshold.
 8. Resolve the GitHub Actions account usage/billing-limit blocker, then rerun frontend `CI / build-and-test` for `7365bee` or the latest frontend commit, plus backend `Backend CI / pytest-and-rag` for `24d0b4b` or the latest backend commit.
 9. Add branch protection for backend `main` requiring `Backend CI / pytest-and-rag`, and keep frontend `CI / build-and-test` required once GitHub plan controls allow it.
-10. Use `EXPECTED_MANIFEST_COMMIT=<short-sha> npm run qa:live` as the first frontend deploy verification check, `EXPECTED_MANIFEST_COMMIT=<short-sha> npm run qa:live:rendered` for rendered production proof, and `.venv/bin/python scripts/live_backend_smoke.py` after backend deploys.
+10. Use `EXPECTED_MANIFEST_COMMIT=<short-sha> npm run qa:live` as the first frontend deploy verification check, `EXPECTED_MANIFEST_COMMIT=<short-sha> npm run qa:live:rendered` for rendered production proof, and `.venv/bin/python scripts/live_backend_smoke.py` after backend deploys. If the normal GitHub-connected backend deploy path is blocked, use `CONFIRM_DIRECT_RAILWAY_DEPLOY=yes ./scripts/railway_direct_deploy.sh` and then push/copy the deployed source back to GitHub.
 11. Prefer scoped Cloudflare deploy tokens over global credentials, and keep deploy credentials out of checked-in files.
 12. Bind Cloudflare KV namespace `ANALYTICS_EVENTS` to activate the source-ready aggregate chatbot analytics counters, then verify `/api/analytics` returns `202` for an allowlisted test event.

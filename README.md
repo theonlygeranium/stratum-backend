@@ -167,6 +167,25 @@ Current local targets:
 - Groundedness proxy: `>= 0.85`.
 - No-key first-token latency: `< 1500ms`.
 
+## Direct Railway Deploy Fallback
+
+Normal backend releases should stay source-driven through GitHub-connected
+Railway deployments. If that path is unavailable or a GitHub-backed deployment
+fails during an urgent release, use the guarded direct deploy helper from the
+backend root:
+
+```bash
+CONFIRM_DIRECT_RAILWAY_DEPLOY=yes \
+./scripts/railway_direct_deploy.sh
+```
+
+The helper deploys the current local source tree with `railway up`, polls
+Railway until the newest deployment reaches a terminal state, and runs
+`scripts/live_backend_smoke.py` after success. It does not print secret values.
+If the local worktree is dirty, it stops unless
+`ALLOW_DIRTY_DIRECT_DEPLOY=yes` is also set; copy any urgent direct-deployed
+source back to GitHub afterward.
+
 ## Deployment Status
 
 The backend is deployed on Railway at:
