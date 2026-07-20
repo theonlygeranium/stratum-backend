@@ -26,10 +26,10 @@ Earlier notes that the frontend source was missing are now superseded. The sourc
 - Current PDF snapshot assets: `/assets/stratumPDF-Bgc_chGe.js`, `/assets/pdf-vendor-B7fMFYQc.js`
 - Current public build manifest: `https://edstratumlabs.ai/build-manifest.json`
 - Backend: `https://stratum-backend-production-a340.up.railway.app`
-- Latest backend runtime/tooling commit verified: `24d0b4b`
+- Latest backend runtime/tooling commit verified: `3a483cb`
 - Latest backend workflow/action-migration commit with hosted CI proof: `f7dced4`
-- Latest backend runtime/tooling commit verified locally, deployed on Railway, and live-smoked: `24d0b4b`
-- Public backend health/runtime routes remain healthy after the source pushes; GitHub status for `24d0b4b` reports Railway deployment success. Hosted backend CI for `24d0b4b` did not start any steps because of the GitHub account billing/spending-limit blocker.
+- Latest backend runtime/tooling commit verified locally, deployed on Railway, and live-smoked: `3a483cb`
+- Public backend health/runtime routes remain healthy after the source pushes; GitHub status for `3a483cb` reports Railway deployment success. Hosted backend CI for `3a483cb` did not start any steps because of the GitHub account billing/spending-limit blocker.
 - Backend runtime previously verified: Writer/Palmyra generation, hash embeddings, Railway Postgres-backed graph/session state
 
 ## QA Summary
@@ -166,8 +166,11 @@ Earlier notes that the frontend source was missing are now superseded. The sourc
   - Railway deployment status for `24d0b4b` returned `success`; post-deploy backend live smoke passed; frontend `EXPECTED_MANIFEST_COMMIT=7365bee npm run qa:live` passed through the same-origin proxy; and `scripts/live_release_audit.py --include-conversation-matrix --skip-github` passed with zero blockers, one expected GitHub-skip warning, and a 54-scenario matrix showing contract/expected/persona/no-hallucination/substance rates all `1.0`, scripted escalation rate `0.2037`, and first-token p95 `115.27ms`.
   - Hosted backend CI run `29752364513` did not start any workflow steps because of the GitHub account billing/spending-limit blocker.
 - Backend direct-deploy fallback update:
-  - Source now includes `scripts/railway_direct_deploy.sh`, a guarded Railway `railway up` fallback for urgent backend releases when GitHub-backed deployment automation is unavailable.
+  - Backend commit `3a483cb` adds `scripts/railway_direct_deploy.sh`, a guarded Railway `railway up` fallback for urgent backend releases when GitHub-backed deployment automation is unavailable.
   - The helper requires `CONFIRM_DIRECT_RAILWAY_DEPLOY=yes`, refuses dirty source unless `ALLOW_DIRTY_DIRECT_DEPLOY=yes` is set, polls `railway deployment list` until a terminal status, captures bounded failure logs under ignored `.railway/`, and runs the safe live backend smoke after success.
+  - Local QA passed on 2026-07-20: `bash -n` for backend deploy scripts, direct-deploy dry run, focused direct-deploy tests (`2 passed`), full pytest (`142 passed, 1 skipped`), RAG eval (`passed: true`, recall@10 `1.0`, groundedness proxy `1.0`), and `git diff --check`.
+  - Railway deployment status for `3a483cb` returned `success`; post-deploy backend live smoke passed; frontend `EXPECTED_MANIFEST_COMMIT=7365bee npm run qa:live` passed through the same-origin proxy; `scripts/live_release_audit.py --skip-github` passed with zero blockers; and `scripts/live_release_audit.py --include-conversation-matrix --skip-github` passed with zero blockers, one expected GitHub-skip warning, and a 54-scenario matrix showing contract/expected/persona/no-hallucination/substance rates all `1.0`, scripted escalation rate `0.2037`, and first-token p95 `78.58ms`.
+  - Hosted backend CI run `29753013804` did not start any workflow steps because of the GitHub account billing/spending-limit blocker.
 
 ## Notes For Future Agents
 
@@ -207,7 +210,7 @@ Earlier notes that the frontend source was missing are now superseded. The sourc
 ## Current SOT Blockers
 
 - GitHub branch protection for frontend `main` is not configured to require `CI / build-and-test`; this is still a release-governance blocker. A GitHub API attempt on 2026-07-20 returned HTTP 403 requiring GitHub Pro or a public repository before branch protection can be enabled.
-- GitHub Actions currently has an account billing/spending-limit blocker. Frontend run `29751826760` for commit `7365bee` and backend run `29752364513` for commit `24d0b4b` failed before starting any workflow steps. Hosted CI proof for later pushes is pending until billing/settings are corrected and the workflows are rerun.
+- GitHub Actions currently has an account billing/spending-limit blocker. Frontend run `29751826760` for commit `7365bee` and backend run `29753013804` for commit `3a483cb` failed before starting any workflow steps. Hosted CI proof for later pushes is pending until billing/settings are corrected and the workflows are rerun.
 - Cloudflare KV rate limiting is not active in production. Live rapid `/api/config` probes did not produce HTTP 429, and the middleware skips enforcement until `RATE_LIMIT` is bound.
 - Cloudflare analytics aggregation is not active in production. Live `/api/analytics` returns `503 analytics_not_configured` until `ANALYTICS_EVENTS` is bound.
 - Cloudflare D1 conversation persistence is not active. `/api/config` returns `persistenceEnabled: false`, and `/api/sessions/.../messages` returns `503 d1_not_configured`.
@@ -268,7 +271,7 @@ Earlier notes that the frontend source was missing are now superseded. The sourc
 5. Create D1 database `stratum-conversations`, run `schema.sql`, bind it as `STRATUM_DB`, add `SESSION_SECRET`, choose an operational purge cadence using `/api/sessions/purge`, then set KV runtime `persistenceEnabled: true` only after a live smoke plan is ready.
 6. Configure voice/TTS only after a safe rollout plan: set Railway `ELEVENLABS_API_KEY`, optional `ELEVENLABS_VOICE_ID`, Cloudflare Pages `VITE_TTS_ENABLED=true`, then KV runtime `voiceEnabled: true`.
 7. Activate managed RAG providers only after staging smoke: set Railway `EMBEDDING_PROVIDER=openai`, `VECTOR_STORE_PROVIDER=pinecone`, `PINECONE_API_KEY`, `PINECONE_INDEX`, optional `PINECONE_NAMESPACE`, then verify `/api/runtime` reports `openai`/`pinecone` and RAG eval remains above threshold.
-8. Resolve the GitHub Actions account usage/billing-limit blocker, then rerun frontend `CI / build-and-test` for `7365bee` or the latest frontend commit, plus backend `Backend CI / pytest-and-rag` for `24d0b4b` or the latest backend commit.
+8. Resolve the GitHub Actions account usage/billing-limit blocker, then rerun frontend `CI / build-and-test` for `7365bee` or the latest frontend commit, plus backend `Backend CI / pytest-and-rag` for `3a483cb` or the latest backend commit.
 9. Add branch protection for backend `main` requiring `Backend CI / pytest-and-rag`, and keep frontend `CI / build-and-test` required once GitHub plan controls allow it.
 10. Use `EXPECTED_MANIFEST_COMMIT=<short-sha> npm run qa:live` as the first frontend deploy verification check, `EXPECTED_MANIFEST_COMMIT=<short-sha> npm run qa:live:rendered` for rendered production proof, and `.venv/bin/python scripts/live_backend_smoke.py` after backend deploys. If the normal GitHub-connected backend deploy path is blocked, use `CONFIRM_DIRECT_RAILWAY_DEPLOY=yes ./scripts/railway_direct_deploy.sh` and then push/copy the deployed source back to GitHub.
 11. Prefer scoped Cloudflare deploy tokens over global credentials, and keep deploy credentials out of checked-in files.
