@@ -63,6 +63,13 @@ ACTIVATION_PROFILES: dict[str, dict[str, Any]] = {
             "persistenceEnabled": True,
         },
     },
+    "edge-voice": {
+        "frontend_flags": {
+            "voiceEnabled": True,
+            "persistenceEnabled": True,
+        },
+        "backend_tts_status": "ok",
+    },
     "full-activation": {
         "frontend_flags": {
             "voiceEnabled": True,
@@ -686,6 +693,8 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
             "`current` matches today's gated-off production runtime; "
             "`managed-rag` expects OpenAI/Pinecone; `voice` expects voice/TTS on; "
             "`persistence` expects conversation persistence on; "
+            "`edge-voice` expects Cloudflare storage plus voice/persistence on while "
+            "managed RAG stays on the current hash/Chroma runtime; "
             "`full-activation` combines managed RAG, voice, and persistence. "
             "Specific --expected-* flags and STRATUM_AUDIT_EXPECT_* env vars still override the profile."
         ),

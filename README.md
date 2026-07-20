@@ -138,6 +138,7 @@ intended target state explicit:
 .venv/bin/python scripts/live_release_audit.py --activation-profile managed-rag
 .venv/bin/python scripts/live_release_audit.py --activation-profile voice
 .venv/bin/python scripts/live_release_audit.py --activation-profile persistence
+.venv/bin/python scripts/live_release_audit.py --activation-profile edge-voice
 .venv/bin/python scripts/live_release_audit.py --activation-profile full-activation
 ```
 
@@ -147,6 +148,7 @@ The profiles are non-mutating expectation bundles:
 - `managed-rag`: expects `embedding_provider=openai` and `vector_store_provider=pinecone`.
 - `voice`: expects frontend `voiceEnabled=true` and backend `tts.status=ok`.
 - `persistence`: expects frontend `persistenceEnabled=true`.
+- `edge-voice`: expects voice and persistence on while keeping managed RAG on the current hash/Chroma runtime.
 - `full-activation`: combines managed RAG, voice, and persistence.
 
 Override individual expectations with CLI flags when a rollout intentionally

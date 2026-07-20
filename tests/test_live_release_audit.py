@@ -95,6 +95,31 @@ def test_release_audit_full_activation_profile_sets_future_expectations(
     assert args.expectations.backend_tts_status == "ok"
 
 
+def test_release_audit_edge_voice_profile_keeps_current_rag_expectations(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    clear_expectation_env(monkeypatch)
+
+    args = live_release_audit.parse_args(
+        ["--skip-github", "--activation-profile", "edge-voice"]
+    )
+
+    assert args.expectations.frontend_flags == {
+        "ragEnabled": True,
+        "voiceEnabled": True,
+        "persistenceEnabled": True,
+    }
+    assert args.expectations.frontend_max_intake_questions == 7
+    assert args.expectations.backend_runtime == {
+        "graph_runtime": "langgraph",
+        "session_store_backend": "postgres",
+        "embedding_provider": "hash",
+        "vector_store_provider": "chroma",
+        "llm_provider": "writer",
+    }
+    assert args.expectations.backend_tts_status == "ok"
+
+
 def test_release_audit_explicit_flags_override_activation_profile(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
