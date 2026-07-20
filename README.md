@@ -6,6 +6,7 @@ The service is designed for the existing React/Vite frontend on Cloudflare Pages
 
 - `POST /api/chat` as a Server-Sent Events stream matching the Phase 1 `StreamEvent` union.
 - `GET /api/health` for platform health checks.
+- `GET /api/runtime` for non-secret runtime diagnostics.
 - LangGraph-based routing for open Q&A, intake, about, and escalation modes.
 - Hybrid RAG retrieval with `rank_bm25`, Chroma-backed dense retrieval, RRF fusion, and configurable reranking.
 - OpenAI-compatible provider streaming for grounded answers, with deterministic fallback token streaming when provider credentials are absent.
@@ -25,6 +26,12 @@ Health check:
 
 ```bash
 curl http://localhost:8000/api/health
+```
+
+Runtime diagnostics:
+
+```bash
+curl http://localhost:8000/api/runtime
 ```
 
 SSE smoke test:

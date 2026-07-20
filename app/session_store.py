@@ -20,6 +20,16 @@ class SessionStore:
         self.memory_counts: dict[str, int] = {}
         self._db_disabled = False
 
+    @property
+    def backend_name(self) -> str:
+        if self.database_url and not self._db_disabled:
+            return "postgres"
+        return "memory"
+
+    @property
+    def database_disabled(self) -> bool:
+        return self._db_disabled
+
     async def get_low_confidence_count(self, session_id: str) -> int:
         state = await self.load_state(session_id)
         return int(state.get("low_confidence_count") or 0)

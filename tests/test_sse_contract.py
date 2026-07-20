@@ -64,6 +64,33 @@ def test_health() -> None:
     }
 
 
+def test_runtime_reports_non_secret_operational_status() -> None:
+    response = client.get("/api/runtime")
+    data = response.json()
+
+    assert response.status_code == 200
+    assert data["status"] == "online"
+    assert data["graph_runtime"] in {"langgraph", "procedural"}
+    assert data["checkpointer"] in {"uninitialized", "memory", "postgres", "none"}
+    assert data["session_store_backend"] in {"postgres", "memory"}
+    assert data["embedding_provider"] in {"hash", "openai"}
+    assert data["vector_store_provider"] in {"chroma", "memory"}
+    assert data["reranker_provider"] in {"heuristic", "cohere"}
+    assert data["required_cors_origins_present"] is True
+
+    for key in [
+        "database_configured",
+        "session_store_database_disabled",
+        "llm_configured",
+        "openai_api_key_configured",
+        "resend_configured",
+        "jeffrey_email_configured",
+        "notifications_configured",
+        "allowed_origins_env_configured",
+    ]:
+        assert isinstance(data[key], bool)
+
+
 @pytest.mark.parametrize("origin", REQUIRED_ORIGINS)
 def test_required_cors_origins(origin: str) -> None:
     preflight = client.options(

@@ -63,6 +63,26 @@ class HealthResponse(ContractModel):
     backend_enabled: Literal[True] = True
 
 
+class RuntimeResponse(ContractModel):
+    status: Literal["online"] = "online"
+    graph_runtime: Literal["langgraph", "procedural"]
+    checkpointer: Literal["uninitialized", "memory", "postgres", "none"]
+    database_configured: bool
+    session_store_backend: Literal["postgres", "memory"]
+    session_store_database_disabled: bool
+    embedding_provider: str
+    vector_store_provider: str
+    reranker_provider: str
+    reranker_model: str | None = None
+    llm_configured: bool
+    openai_api_key_configured: bool
+    resend_configured: bool
+    jeffrey_email_configured: bool
+    notifications_configured: bool
+    allowed_origins_env_configured: bool
+    required_cors_origins_present: bool
+
+
 class PhaseEvent(ContractModel):
     type: Literal["phase"]
     phase: ProcessingPhase

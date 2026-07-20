@@ -10,6 +10,7 @@ Checked on 2026-07-20 after the Railway-backed STRATUM deployment and graph-back
 - Railway deployment status: verified after each backend push through GitHub deployment status and live health checks.
 - Public backend URL: `https://stratum-backend-production-a340.up.railway.app`
 - Health check: `GET /api/health` returns `{"status":"healthy","stratum":"online","backend_enabled":true}`
+- Runtime diagnostics: `GET /api/runtime` reports non-secret provider, Postgres/checkpointer, notification, and CORS readiness state.
 
 ## Cloudflare Pages
 

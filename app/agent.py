@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from collections.abc import AsyncGenerator
 from contextvars import ContextVar
 from typing import Any
@@ -78,6 +79,36 @@ class StratumAgent:
             escalation_handler=self._escalate,
             generate_handler=self._generate_open_from_state,
         )
+
+    def runtime_status(self) -> dict[str, Any]:
+        graph_runtime_name = (
+            "langgraph" if self.graph_runtime is not None else "procedural"
+        )
+        checkpointer_name = (
+            self.graph_runtime.checkpointer_name
+            if self.graph_runtime is not None
+            else "none"
+        )
+        return {
+            "status": "online",
+            "graph_runtime": graph_runtime_name,
+            "checkpointer": checkpointer_name,
+            "database_configured": bool(self.settings.database_url),
+            "session_store_backend": self.session_store.backend_name,
+            "session_store_database_disabled": self.session_store.database_disabled,
+            "embedding_provider": self.retriever.embedding_provider,
+            "vector_store_provider": self.retriever.vector_store_provider,
+            "reranker_provider": self.retriever.reranker_provider,
+            "reranker_model": self.retriever.reranker_model,
+            "llm_configured": bool(self.settings.llm_api_key),
+            "openai_api_key_configured": bool(os.getenv("OPENAI_API_KEY")),
+            "resend_configured": bool(self.settings.resend_api_key),
+            "jeffrey_email_configured": bool(self.settings.jeffrey_email),
+            "notifications_configured": bool(
+                self.settings.resend_api_key and self.settings.jeffrey_email
+            ),
+            "allowed_origins_env_configured": os.getenv("ALLOWED_ORIGINS") is not None,
+        }
 
     async def respond(
         self,

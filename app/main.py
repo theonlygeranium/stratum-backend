@@ -8,7 +8,7 @@ from fastapi.responses import StreamingResponse
 
 from app.agent import StratumAgent
 from app.config import get_settings
-from app.models import ChatRequest, ErrorEvent, HealthResponse
+from app.models import ChatRequest, ErrorEvent, HealthResponse, RuntimeResponse
 from app.sse import sse_event
 
 settings = get_settings()
@@ -47,6 +47,16 @@ app.add_middleware(
 @app.get("/api/health", response_model=HealthResponse)
 async def health() -> HealthResponse:
     return HealthResponse()
+
+
+@app.get("/api/runtime", response_model=RuntimeResponse)
+async def runtime() -> RuntimeResponse:
+    status = agent.runtime_status()
+    status["required_cors_origins_present"] = all(
+        origin in _cors_origins(settings.allowed_origins)
+        for origin in REQUIRED_CORS_ORIGINS
+    )
+    return RuntimeResponse.model_validate(status)
 
 
 @app.post("/api/chat")
