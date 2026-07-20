@@ -1,16 +1,25 @@
 # STRATUM Deploy Status
 
-Checked on 2026-07-20 after the Railway-backed STRATUM deployment and graph-backed SSE refresh.
+Checked on 2026-07-20 after the Railway-backed STRATUM deployment,
+runtime-diagnostics pass, OpenAI embedding wiring fix, and Resend sender fallback.
 
 ## Backend
 
 - GitHub repository: `theonlygeranium/stratum-backend`
 - Branch: `main`
 - Railway project/environment: `sunny-ambition / production`
-- Railway deployment status: verified after each backend push through GitHub deployment status and live health checks.
+- Latest verified Railway-backed commit: `c27ec86`
+- Railway deployment status: `success` for `sunny-ambition - stratum-backend`
+  through GitHub deployment status and live health/runtime checks.
 - Public backend URL: `https://stratum-backend-production-a340.up.railway.app`
 - Health check: `GET /api/health` returns `{"status":"healthy","stratum":"online","backend_enabled":true}`
-- Runtime diagnostics: `GET /api/runtime` reports non-secret provider, Postgres/checkpointer, notification, and CORS readiness state.
+- Runtime diagnostics: `GET /api/runtime` reports `graph_runtime=langgraph`,
+  `checkpointer=postgres`, `database_configured=true`,
+  `session_store_backend=postgres`, `embedding_provider=openai`,
+  `vector_store_provider=chroma`, `llm_configured=true`,
+  `openai_api_key_configured=true`, `notifications_configured=true`,
+  `allowed_origins_env_configured=true`, and
+  `required_cors_origins_present=true`.
 
 ## Cloudflare Pages
 
@@ -23,7 +32,7 @@ Checked on 2026-07-20 after the Railway-backed STRATUM deployment and graph-back
 
 ## Verification
 
-- Backend test suite: `106 passed, 1 skipped, 2 warnings`
+- Backend test suite: `108 passed, 1 skipped, 2 warnings`
 - Optional Postgres checkpoint smoke: passed locally with `STRATUM_TEST_DATABASE_URL`.
 - RAG acceptance harness: `20` local golden questions passed with Recall@10 `1.0`, groundedness proxy `1.0`, retrieval p50 `1.97ms` / p95 `2.90ms`, and no-key first-token latency `11.32ms`.
 - `/api/chat` SSE now uses the compiled LangGraph runtime for direct escalation, intake, about, and open Q&A. Open Q&A streams the graph-prepared retrieval/source state before LLM tokens, then checkpoints the generated result through the graph `generate` node.
@@ -34,6 +43,9 @@ Checked on 2026-07-20 after the Railway-backed STRATUM deployment and graph-back
 - Docker build: passed with the Railway-compatible `${PORT:-8000}` command.
 - Secret/token scan: no matches in tracked backend source.
 - Live backend SSE smoke test: passed for open/about/escalation paths.
+- Live non-eval Resend escalation smoke: passed; the production SSE response
+  confirmed "I've sent Jeffrey a summary" and completed with
+  `DONE escalate=explicit`.
 - Live progressive streaming spot check: graph-backed open Q&A emitted `searching`, `retrieving`, `composing`, `source`, then tokens; first SSE event in `102.36ms`.
 - Live CORS preflight from `https://edstratumlabs.ai`: passed.
 - Live frontend SEO tags: meta description, canonical, OG title, and OG description present.
@@ -41,10 +53,10 @@ Checked on 2026-07-20 after the Railway-backed STRATUM deployment and graph-back
 
 ## Remaining Strict Spec Gaps
 
-- LangGraph routing now exposes the executable spec topology: `route`, `open`, `intake`, `assess`, `about`, `escalation`, `notify`, and shared terminal `generate`; optional PostgresSaver checkpoint support is implemented, but production checkpoint table creation still needs Railway runtime verification with `DATABASE_URL`.
+- LangGraph routing now exposes the executable spec topology: `route`, `open`, `intake`, `assess`, `about`, `escalation`, `notify`, and shared terminal `generate`; PostgresSaver checkpoint support is implemented and production runtime verification confirms `checkpointer=postgres`.
 - Diagram-level `rag`, `persona`, and `handoff` stages remain consolidated into branch handlers. Open-mode retrieval and generation are separated for SSE/checkpointing, but the graph still does not expose every diagram label as its own node.
-- Retrieval now uses `rank_bm25`, Chroma-backed dense retrieval, RRF-style fusion, and auto-selects OpenAI embeddings when `OPENAI_API_KEY` is present; no-key local/demo runs use deterministic hash embeddings.
-- Reranking auto-selects Cohere cross-encoder reranking when `COHERE_API_KEY` is present; no-key local/demo runs use heuristic reranking. The demo Railway env does not require Cohere.
+- Retrieval now uses `rank_bm25`, Chroma-backed dense retrieval, RRF-style fusion, and OpenAI embeddings in production; no-key local/demo runs use deterministic hash embeddings.
+- Reranking auto-selects Cohere cross-encoder reranking when `COHERE_API_KEY` is present; the demo Railway env skips Cohere and uses heuristic reranking as allowed by the deploy directive.
 - Acceptance metrics now run locally through `scripts/eval_rag.py` and against Railway through `scripts/eval_deployed_conversations.py`; passive production traffic analytics for real visitor escalation and abandonment remain uninstrumented.
 
 ## Notes
