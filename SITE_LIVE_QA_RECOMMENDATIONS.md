@@ -16,10 +16,11 @@ Earlier notes that the frontend source was missing are now superseded. The sourc
 - Site: `https://edstratumlabs.ai`
 - Cloudflare Pages project: `edstratumlabs`
 - Cloudflare source: GitHub repo `theonlygeranium/edstratum-v2-frontend`
-- Latest source commit observed in Pages production metadata: `f6cc8b4`
-- Current production entry asset: `/assets/index-BChwigZm.js`
-- Current STRATUM chat asset: `/assets/StratumChat-Cl3e2M0J.js`
+- Latest source commit observed in Pages production metadata: `ec95e8b`
+- Current production entry asset: `/assets/index-BmMnKl08.js`
+- Current STRATUM chat asset: `/assets/StratumChat-DcniEbxZ.js`
 - Backend: `https://stratum-backend-production-a340.up.railway.app`
+- Latest backend main commit verified by public health/SSE behavior: `cde0dbe`
 - Backend runtime previously verified: Writer/Palmyra generation, hash embeddings, Railway Postgres-backed graph/session state
 
 ## QA Summary
@@ -31,6 +32,10 @@ Earlier notes that the frontend source was missing are now superseded. The sourc
 - Live STRATUM chat reached Railway `/api/chat` with HTTP 200 from the production origin.
 - Source, built output, and live index scan clean for personal-name, direct-person CTA, and scheduling-link copy.
 - Live completed response used discretion-safe leadership handoff language.
+- RAG citation enhancement deployed:
+  - Public `/api/health` returns `rag: { status: "ok", vectorStoreConnected: true }`.
+  - Live `/api/chat` SSE smoke with `X-Stratum-Eval: true` returned HTTP 200, SSE content type, terminal `done`, and citation rows.
+  - Live `https://edstratumlabs.ai` rendered and expanded citation excerpts from the production backend.
 
 ## Notes For Future Agents
 
@@ -43,11 +48,10 @@ Earlier notes that the frontend source was missing are now superseded. The sourc
 - Pushing frontend `main` automatically deploys production; pushing frontend feature branches creates preview deployments.
 - Production Cloudflare env includes `VITE_STRATUM_API_URL`. Preview env vars were last verified as unset, so branch previews may use mock chat unless the backend URL is added to preview settings.
 
-## In-Flight Feature Branch
+## Completed Feature 1
 
-- Branch `feat/rag-backend` is implementing the enhancement spec's RAG citation delta on the Python/FastAPI backend: `RagCitation`, `citations` SSE events before terminal `done`, citation extraction from retrieved KB chunks, graph checkpoint preservation, and RAG health in `/api/health`.
-- Local branch QA passed on 2026-07-20 with `./.venv/bin/pytest -q` (`112 passed, 1 skipped`).
-- This is not production evidence until the branch is merged/deployed and live QA confirms the Railway backend emits citations and the production frontend renders them.
+- Enhancement spec Feature 1 citation delta is deployed on the Python/FastAPI backend: `RagCitation`, `citations` SSE events before terminal `done`, citation extraction from retrieved KB chunks, graph checkpoint preservation, and RAG health in `/api/health`.
+- Local and production QA passed on 2026-07-20. Railway CLI auth was unavailable in the shell, so public health/runtime/SSE endpoints were used as deployment evidence.
 
 ## Recommended Next Steps
 
