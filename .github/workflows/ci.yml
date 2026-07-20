@@ -44,10 +44,13 @@ jobs:
         run: pytest -q
 
       - name: Run RAG eval
-        run: python scripts/eval_rag.py --json | tee rag-eval-report.json
+        shell: bash
+        run: |
+          set -o pipefail
+          python scripts/eval_rag.py --json | tee rag-eval-report.json
 
       - name: Upload RAG eval report
-        if: failure()
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: rag-eval-report
