@@ -18,6 +18,7 @@ Earlier notes that the frontend source was missing are now superseded. The sourc
 - Cloudflare source: GitHub repo `theonlygeranium/edstratum-v2-frontend`
 - Latest frontend production code-bearing commit verified: `36f201f`
 - Latest verified code-bearing frontend manifest commit: `36f201f`; docs-only pushes can advance the manifest git SHA while leaving code-bearing asset hashes unchanged.
+- Latest verified frontend workflow-only manifest commit: `d01ce68`
 - Current production entry asset: `/assets/index-Cld5-OrE.js`
 - Current production stylesheet asset: `/assets/index-DH0EGGDC.css`
 - Current STRATUM chat asset: `/assets/StratumChat-5iN0axbq.js`
@@ -25,7 +26,8 @@ Earlier notes that the frontend source was missing are now superseded. The sourc
 - Current public build manifest: `https://edstratumlabs.ai/build-manifest.json`
 - Backend: `https://stratum-backend-production-a340.up.railway.app`
 - Latest backend code/helper commit pushed: `728f217`
-- Public backend health/runtime routes remain healthy after the source pushes; GitHub status for `728f217` reports Railway deployment success plus `Backend CI / pytest-and-rag` success.
+- Latest backend workflow-only commit pushed: `f7dced4`
+- Public backend health/runtime routes remain healthy after the source pushes; GitHub status for `f7dced4` reports Railway deployment success plus `Backend CI / pytest-and-rag` success.
 - Backend runtime previously verified: Writer/Palmyra generation, hash embeddings, Railway Postgres-backed graph/session state
 
 ## QA Summary
@@ -111,6 +113,9 @@ Earlier notes that the frontend source was missing are now superseded. The sourc
   - Backend commit `728f217` aligns Railway and Cloudflare helper scripts with the current runtime: Writer and primary escalation envs are required, managed RAG/TTS envs are optional with provider guardrails, frontend helper defaults point at the sibling source repo, and `eval_rag.py` clears external API keys for the no-key evaluation path.
   - Local backend QA passed on 2026-07-20: shell syntax checks for deploy helpers, `git diff --check`, dry-run Cloudflare env helper, live SEO/build-manifest verification, full pytest (`129 passed, 1 skipped`), and RAG eval (`passed: true`, recall@10 `1.0`, groundedness proxy `1.0`) using `hash`/`chroma`/`heuristic`.
   - Hosted backend CI runs `29734912402` and `29735038155` passed, Railway deployment status for `728f217` returned `success`, and safe public health/runtime smoke remained healthy.
+- GitHub Actions Node 24 migration update:
+  - Frontend commit `d01ce68` updates CI action pins to `actions/checkout@v5`, `actions/setup-node@v5`, `actions/upload-artifact@v6`, and `actions/github-script@v8` while leaving the frontend app build runtime at `node-version: '20'`. Hosted main CI `29739390956` passed with `156 passed`; strict log search found no deprecated Node.js 20 JavaScript-action warning. Live `/build-manifest.json` returned commit `d01ce68` with unchanged code-bearing assets `/assets/index-Cld5-OrE.js`, `/assets/index-DH0EGGDC.css`, and `/assets/StratumChat-5iN0axbq.js`.
+  - Backend commit `f7dced4` updates CI action pins to `actions/checkout@v5`, `actions/setup-python@v6`, `actions/upload-artifact@v6`, and `actions/github-script@v8` while leaving the backend Python runtime at `3.11`. Hosted backend CI run `29739391077` passed, GitHub status for `f7dced4` is `success`, Railway deployment status is `success`, and public Railway `/api/health` plus `/api/runtime` remained healthy.
 
 ## Notes For Future Agents
 
@@ -138,6 +143,7 @@ Earlier notes that the frontend source was missing are now superseded. The sourc
 - Frontend commit `a2a9551` adds D1 deletion/retention purge primitives, same-origin microphone policy readiness, and same-origin `/api/tts` runtime fail-closed behavior.
 - Frontend commit `36f201f` adds privacy-safe aggregate chatbot analytics readiness and same-origin `/api/analytics`, gated by the optional Cloudflare KV binding `ANALYTICS_EVENTS`.
 - Backend commit `728f217` keeps deploy helpers aligned with current runtime env names and makes optional managed RAG/TTS variables explicit without printing secret values.
+- Frontend commit `d01ce68` and backend commit `f7dced4` migrate GitHub Actions to Node 24-native action majors. This does not change the frontend app `node-version: '20'` or backend Python `3.11` runtime choices.
 
 ## Current SOT Blockers
 
@@ -147,7 +153,6 @@ Earlier notes that the frontend source was missing are now superseded. The sourc
 - Cloudflare D1 conversation persistence is not active. `/api/config` returns `persistenceEnabled: false`, and `/api/sessions/.../messages` returns `503 d1_not_configured`.
 - Voice/TTS is not active in production. `/api/config` returns `voiceEnabled: false`, `/api/health` reports `tts.status: "unconfigured"`, and live same-origin `/api/tts` fails closed with `503 tts_disabled` while runtime voice is disabled.
 - Backend runtime reports `embedding_provider: "hash"` and `vector_store_provider: "chroma"`; the OpenAI/Pinecone path is now source-ready and locally tested, but production still needs Railway env activation before the managed provider path is live.
-- Hosted frontend and backend CI currently emit GitHub annotations that some pinned GitHub Actions target deprecated Node.js 20 and are being forced to Node.js 24. Runs pass, but this should be monitored before the forced compatibility path changes.
 - Wrangler and Railway CLI are unauthenticated in this shell, and no safe control-plane tokens are present, so Cloudflare bindings, Railway env vars, and exact deployment SHAs cannot be changed or verified from here.
 
 ## Completed Feature 1
@@ -207,4 +212,4 @@ Earlier notes that the frontend source was missing are now superseded. The sourc
 9. Use `/build-manifest.json` as the first frontend deploy verification check before deeper rendered QA.
 10. Prefer scoped Cloudflare deploy tokens over global credentials, and keep deploy credentials out of checked-in files.
 11. Bind Cloudflare KV namespace `ANALYTICS_EVENTS` to activate the source-ready aggregate chatbot analytics counters, then verify `/api/analytics` returns `202` for an allowlisted test event.
-12. Upgrade or repin GitHub Actions once Node 24-native versions are available for the currently annotated actions.
+12. Evaluate a separate frontend CI app-runtime move from Node 20 to Node 24, or pin Wrangler to a Node 20-compatible version, because the action-runtime migration did not change the app runtime.

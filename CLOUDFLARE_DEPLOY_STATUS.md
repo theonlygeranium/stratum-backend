@@ -1,7 +1,6 @@
 # STRATUM Deploy Status
 
-Checked on 2026-07-20 UTC after backend CI hardening and frontend public
-build-manifest deployment.
+Checked on 2026-07-20 UTC after GitHub Actions Node 24 migration verification.
 
 ## Backend
 
@@ -11,7 +10,7 @@ build-manifest deployment.
 - Public backend URL: `https://stratum-backend-production-a340.up.railway.app`
 - Latest backend code-bearing commit verified for managed RAG plumbing:
   `41b2ae9`
-- Latest backend CI hardening commit verified: `3d6387a`
+- Latest backend workflow/action-migration commit verified: `f7dced4`
 - Docs-only commits can advance Railway deployment metadata without changing
   backend runtime behavior. Verify the current deployment through GitHub commit
   status, Railway deployment status, and public `/api/health` plus `/api/runtime`.
@@ -41,7 +40,8 @@ Current public runtime evidence:
 - Production aliases: `https://edstratumlabs.ai`,
   `https://www.edstratumlabs.ai`
 - Frontend GitHub repository: `theonlygeranium/edstratum-v2-frontend`
-- Latest frontend code-bearing manifest commit verified: `c5f6431`
+- Latest frontend code-bearing manifest commit verified: `36f201f`
+- Latest frontend workflow-only manifest commit verified: `d01ce68`
 - Current production metadata endpoint:
   `https://edstratumlabs.ai/build-manifest.json`
 - The manifest intentionally exposes only non-secret deployment metadata:
@@ -61,8 +61,12 @@ Current public runtime evidence:
 - Backend CI runs `pytest -q`, `scripts/eval_rag.py --json` with Bash
   `pipefail`, and uploads `rag-eval-report.json` every run.
 - Frontend CI runs type-check, lint, production build, dist manifest assertion,
-  forbidden-copy scan, and Playwright. Latest verified frontend manifest run
-  passed with `124` Playwright tests.
+  Cloudflare Pages Functions build, forbidden-copy scan, and Playwright. Latest
+  verified frontend workflow run `29739390956` passed with `156` Playwright
+  tests.
+- GitHub Actions are now pinned to Node 24-native action majors in the frontend
+  (`d01ce68`) and backend (`f7dced4`) workflows. Strict hosted-log searches
+  found no deprecated Node.js 20 JavaScript-action warning after migration.
 - Live same-origin `/api/health` on `https://edstratumlabs.ai` proxies Railway
   and returns healthy status.
 - Live `/api/config` currently returns `ragEnabled: true`,
@@ -86,6 +90,6 @@ Current public runtime evidence:
 - Railway managed RAG provider activation is pending as described above.
 - Voice/TTS activation is pending Railway ElevenLabs credentials plus frontend
   and runtime feature flags.
-- Hosted GitHub Actions currently annotate Node.js 20 action deprecation and
-  forced Node.js 24 compatibility. Runs pass, but action versions should be
-  watched before the compatibility path changes.
+- A separate frontend app-runtime decision remains open: the workflow still
+  requests `node-version: '20'`, which is independent from the GitHub Actions
+  JavaScript runtime migration.
