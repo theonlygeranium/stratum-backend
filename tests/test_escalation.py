@@ -40,6 +40,7 @@ def _settings(tmp_path: Path) -> Settings:
         resend_from_email="stratum@example.com",
         elevenlabs_api_key=None,
         elevenlabs_voice_id="test-voice",
+        elevenlabs_base_url="https://api.us.elevenlabs.io/v1",
     )
 
 
