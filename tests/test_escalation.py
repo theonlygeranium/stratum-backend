@@ -1,12 +1,15 @@
 from __future__ import annotations
 
 import asyncio
+import sys
 from pathlib import Path
+from types import SimpleNamespace
 
 from app.config import Settings
 from app.escalation import (
     RESEND_FALLBACK_FROM_EMAIL,
     _ESCALATION_SENDS,
+    _consume_rate_limit_postgres,
     send_or_log_escalation,
 )
 
@@ -217,3 +220,43 @@ def test_escalation_rate_limit_is_per_session(monkeypatch, tmp_path) -> None:
         "rate_limited",
     ]
     assert calls == 3
+
+
+def test_postgres_rate_limiter_rejects_fourth_send(monkeypatch) -> None:
+    sent_sessions: list[str] = []
+
+    class FakeCursor:
+        def __init__(self, row=None):
+            self._row = row
+
+        def fetchone(self):
+            return self._row
+
+    class FakeConnection:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb) -> None:
+            return None
+
+        def execute(self, sql: str, params: tuple[str, ...] | None = None):
+            normalized = " ".join(sql.split()).upper()
+            if normalized.startswith("SELECT COUNT"):
+                return FakeCursor((len(sent_sessions),))
+            if normalized.startswith("INSERT INTO STRATUM_RATE_LIMITS"):
+                assert params is not None
+                sent_sessions.append(params[0])
+            return FakeCursor()
+
+    fake_psycopg = SimpleNamespace(
+        connect=lambda database_url, connect_timeout, autocommit: FakeConnection()
+    )
+    monkeypatch.setitem(sys.modules, "psycopg", fake_psycopg)
+
+    results = [
+        _consume_rate_limit_postgres("pg-rate-limit", "postgresql://example/stratum")
+        for _ in range(4)
+    ]
+
+    assert results == [True, True, True, False]
+    assert sent_sessions == ["pg-rate-limit", "pg-rate-limit", "pg-rate-limit"]

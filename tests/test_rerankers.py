@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import asyncio
+
 from app.rag.rerankers import CohereReranker, HeuristicReranker, RerankCandidate
 
 
@@ -15,9 +17,11 @@ def _candidate(index: int, heuristic_score: float) -> RerankCandidate:
 
 
 def test_heuristic_reranker_orders_by_local_score() -> None:
-    results = HeuristicReranker().rerank(
-        "query",
-        [_candidate(1, 0.4), _candidate(2, 0.8), _candidate(3, 0.6)],
+    results = asyncio.run(
+        HeuristicReranker().rerank(
+            "query",
+            [_candidate(1, 0.4), _candidate(2, 0.8), _candidate(3, 0.6)],
+        )
     )
 
     assert [result.index for result in results] == [2, 3, 1]
@@ -43,23 +47,25 @@ def test_cohere_reranker_uses_cross_encoder_scores(monkeypatch) -> None:
         def __init__(self, timeout: float):
             self.timeout = timeout
 
-        def __enter__(self):
+        async def __aenter__(self):
             return self
 
-        def __exit__(self, exc_type, exc, tb) -> None:
+        async def __aexit__(self, exc_type, exc, tb) -> None:
             return None
 
-        def post(self, endpoint: str, *, headers: dict, json: dict) -> FakeResponse:
+        async def post(self, endpoint: str, *, headers: dict, json: dict) -> FakeResponse:
             captured_payload["endpoint"] = endpoint
             captured_payload["headers"] = headers
             captured_payload["json"] = json
             return FakeResponse()
 
-    monkeypatch.setattr("app.rag.rerankers.httpx.Client", FakeClient)
+    monkeypatch.setattr("app.rag.rerankers.httpx.AsyncClient", FakeClient)
 
-    results = CohereReranker(api_key="test-key", model="rerank-v4.0-fast").rerank(
-        "query",
-        [_candidate(10, 0.8), _candidate(20, 0.2)],
+    results = asyncio.run(
+        CohereReranker(api_key="test-key", model="rerank-v4.0-fast").rerank(
+            "query",
+            [_candidate(10, 0.8), _candidate(20, 0.2)],
+        )
     )
 
     assert [result.index for result in results] == [20, 10]

@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import argparse
+import asyncio
 import json
 import os
 import statistics
@@ -32,7 +33,7 @@ def load_golden(path: Path) -> list[dict[str, Any]]:
     return cases
 
 
-def evaluate_retrieval(cases: list[dict[str, Any]]) -> dict[str, Any]:
+async def evaluate_retrieval_async(cases: list[dict[str, Any]]) -> dict[str, Any]:
     start = time.perf_counter()
     settings = get_settings()
     retriever = HybridRetriever(
@@ -59,7 +60,7 @@ def evaluate_retrieval(cases: list[dict[str, Any]]) -> dict[str, Any]:
 
     for case in cases:
         started = time.perf_counter()
-        result = retriever.retrieve(case["query"], top_k=10)
+        result = await retriever.retrieve(case["query"], top_k=10)
         elapsed_ms = (time.perf_counter() - started) * 1000
         latencies.append(elapsed_ms)
         hit = _case_hit(case, result.docs)
@@ -103,6 +104,10 @@ def evaluate_retrieval(cases: list[dict[str, Any]]) -> dict[str, Any]:
         "reranker_model": retriever.reranker_model,
         "cases": details,
     }
+
+
+def evaluate_retrieval(cases: list[dict[str, Any]]) -> dict[str, Any]:
+    return asyncio.run(evaluate_retrieval_async(cases))
 
 
 def evaluate_first_token_latency() -> dict[str, Any]:

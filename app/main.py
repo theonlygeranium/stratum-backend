@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+import asyncio
 from collections.abc import AsyncGenerator
+from contextlib import asynccontextmanager
 from datetime import UTC, datetime
 
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, StreamingResponse
 
@@ -18,9 +20,11 @@ from app.models import (
     EscalationRequest,
     HealthResponse,
     RuntimeResponse,
+    StreamEvent,
     TTSRequest,
     healthy_response,
 )
+from app.observability import render_prometheus_metrics
 from app.sse import sse_event
 from app.tts import synthesize_speech
 
@@ -51,10 +55,19 @@ def _suppresses_notifications(request: Request) -> bool:
     )
 
 
+@asynccontextmanager
+async def lifespan(_: FastAPI) -> AsyncGenerator[None, None]:
+    try:
+        yield
+    finally:
+        await agent.close()
+
+
 app = FastAPI(
     title="STRATUM Backend",
     version="1.0.0",
     description="FastAPI/SSE backend for EdStratum Labs STRATUM.",
+    lifespan=lifespan,
 )
 
 app.add_middleware(
@@ -83,15 +96,27 @@ async def runtime() -> RuntimeResponse:
     return RuntimeResponse.model_validate(status)
 
 
+@app.get("/api/metrics")
+async def metrics() -> Response:
+    if not settings.enable_metrics:
+        return Response(status_code=404)
+    return Response(
+        content=render_prometheus_metrics(),
+        media_type="text/plain; version=0.0.4",
+    )
+
+
 @app.post("/api/chat")
 async def chat(request: ChatRequest, http_request: Request) -> StreamingResponse:
     async def stream() -> AsyncGenerator[str, None]:
         try:
-            async for event in agent.stream(
-                request,
-                suppress_notifications=_suppresses_notifications(http_request),
+            async for item in _stream_with_keepalive(
+                agent.stream(
+                    request,
+                    suppress_notifications=_suppresses_notifications(http_request),
+                )
             ):
-                yield sse_event(event)
+                yield item
         except Exception:
             yield sse_event(
                 ErrorEvent(
@@ -108,6 +133,43 @@ async def chat(request: ChatRequest, http_request: Request) -> StreamingResponse
         media_type="text/event-stream",
         headers=SSE_HEADERS,
     )
+
+
+async def _stream_with_keepalive(
+    events: AsyncGenerator[StreamEvent, None],
+    *,
+    interval_s: float = 10.0,
+) -> AsyncGenerator[str, None]:
+    queue: asyncio.Queue[str | None] = asyncio.Queue()
+
+    async def producer() -> None:
+        try:
+            async for event in events:
+                await queue.put(sse_event(event))
+        finally:
+            await queue.put(None)
+
+    async def keepalive() -> None:
+        while True:
+            await asyncio.sleep(interval_s)
+            await queue.put(":keepalive\n\n")
+
+    producer_task = asyncio.create_task(producer())
+    keepalive_task = asyncio.create_task(keepalive())
+
+    try:
+        while True:
+            item = await queue.get()
+            if item is None:
+                break
+            yield item
+    finally:
+        keepalive_task.cancel()
+        try:
+            await keepalive_task
+        except asyncio.CancelledError:
+            pass
+        await producer_task
 
 
 @app.post("/api/escalate", response_model=EscalationDelivery)

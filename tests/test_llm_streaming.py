@@ -4,8 +4,9 @@ import asyncio
 import json
 from pathlib import Path
 
+from app.agent import _truncate_response
 from app.config import Settings
-from app.llm import stream_response
+from app.llm import build_chat_messages, stream_response
 
 
 def _settings() -> Settings:
@@ -100,4 +101,115 @@ def test_stream_response_parses_openai_compatible_deltas(monkeypatch) -> None:
     assert captured["method"] == "POST"
     assert captured["url"] == "https://llm.example/v1/chat/completions"
     assert captured["json"]["stream"] is True
+    assert captured["json"]["max_tokens"] == 200
     assert captured["json"]["messages"][0] == {"role": "system", "content": "system"}
+
+
+def test_truncate_response_prefers_sentence_boundary() -> None:
+    response = (
+        "First sentence is useful. Second sentence should stay intact. "
+        "Third sentence is too long for the configured response budget."
+    )
+
+    truncated = _truncate_response(response, 70)
+
+    assert truncated == "First sentence is useful. Second sentence should stay intact.…"
+    assert len(truncated) < len(response)
+
+
+def test_build_chat_messages_summarizes_older_history(monkeypatch) -> None:
+    captured: list[dict] = []
+
+    class FakeResponse:
+        def raise_for_status(self) -> None:
+            return None
+
+        def json(self) -> dict:
+            return {
+                "choices": [
+                    {
+                        "message": {
+                            "content": "Visitor has Canvas data questions and wants a maintainable pilot."
+                        }
+                    }
+                ]
+            }
+
+    class FakeAsyncClient:
+        def __init__(self, timeout: float):
+            self.timeout = timeout
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, exc_type, exc, tb) -> None:
+            return None
+
+        async def post(self, url: str, *, headers: dict, json: dict):
+            captured.append(json)
+            return FakeResponse()
+
+    monkeypatch.setattr("app.llm.httpx.AsyncClient", FakeAsyncClient)
+    settings = _settings()
+    object.__setattr__(settings, "llm_history_window", 2)
+    object.__setattr__(settings, "llm_summary_threshold", 3)
+    history = [
+        {"role": "user", "content": f"user turn {index}"}
+        if index % 2 == 0
+        else {"role": "assistant", "content": f"assistant turn {index}"}
+        for index in range(6)
+    ]
+
+    messages = asyncio.run(
+        build_chat_messages(
+            settings=settings,
+            system_prompt="system",
+            context="context",
+            conversation_history=history,
+            query="query",
+        )
+    )
+
+    assert captured
+    assert messages[1]["role"] == "system"
+    assert "Conversation summary so far" in messages[1]["content"]
+    assert [message["content"] for message in messages[2:4]] == [
+        "user turn 4",
+        "assistant turn 5",
+    ]
+
+
+def test_build_chat_messages_drops_old_history_when_summary_fails(monkeypatch) -> None:
+    class FakeAsyncClient:
+        def __init__(self, timeout: float):
+            self.timeout = timeout
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, exc_type, exc, tb) -> None:
+            return None
+
+        async def post(self, url: str, *, headers: dict, json: dict):
+            raise RuntimeError("summary down")
+
+    monkeypatch.setattr("app.llm.httpx.AsyncClient", FakeAsyncClient)
+    settings = _settings()
+    object.__setattr__(settings, "llm_history_window", 2)
+    object.__setattr__(settings, "llm_summary_threshold", 3)
+    history = [{"role": "user", "content": f"turn {index}"} for index in range(5)]
+
+    messages = asyncio.run(
+        build_chat_messages(
+            settings=settings,
+            system_prompt="system",
+            context="context",
+            conversation_history=history,
+            query="query",
+        )
+    )
+
+    assert [message["content"] for message in messages[1:3]] == ["turn 3", "turn 4"]
+    assert all(
+        "Conversation summary so far" not in message["content"] for message in messages
+    )

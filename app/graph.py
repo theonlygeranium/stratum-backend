@@ -208,6 +208,15 @@ class StratumGraphRuntime:
             as_node=as_node,
         )
 
+    async def close(self) -> None:
+        context = self._checkpointer_context
+        if context is None:
+            return
+        self._checkpointer_context = None
+        self.compiled = None
+        self.checkpointer_name = "uninitialized"
+        await context.__aexit__(None, None, None)
+
     @staticmethod
     def _config(request: ChatRequest) -> dict[str, dict[str, str]]:
         return {"configurable": {"thread_id": request.session_id}}

@@ -6,6 +6,8 @@ from typing import Protocol
 
 import httpx
 
+from app.observability import increment_counter, log_event
+
 
 @dataclass(frozen=True)
 class RerankCandidate:
@@ -30,7 +32,7 @@ class Reranker(Protocol):
     name: str
     model: str | None
 
-    def rerank(
+    async def rerank(
         self,
         query: str,
         candidates: Sequence[RerankCandidate],
@@ -42,7 +44,7 @@ class HeuristicReranker:
     name = "heuristic"
     model = None
 
-    def rerank(
+    async def rerank(
         self,
         query: str,
         candidates: Sequence[RerankCandidate],
@@ -82,7 +84,7 @@ class CohereReranker:
         self.timeout = timeout
         self._fallback = HeuristicReranker()
 
-    def rerank(
+    async def rerank(
         self,
         query: str,
         candidates: Sequence[RerankCandidate],
@@ -91,8 +93,8 @@ class CohereReranker:
             return []
 
         try:
-            with httpx.Client(timeout=self.timeout) as client:
-                response = client.post(
+            async with httpx.AsyncClient(timeout=self.timeout) as client:
+                response = await client.post(
                     self.endpoint,
                     headers={
                         "Authorization": f"Bearer {self.api_key}",
@@ -107,8 +109,15 @@ class CohereReranker:
                 )
                 response.raise_for_status()
                 data = response.json()
-        except Exception:
-            return self._fallback.rerank(query, candidates)
+        except Exception as exc:
+            log_event(
+                "warning",
+                "cohere_rerank_fallback",
+                error_type=type(exc).__name__,
+                model=self.model,
+            )
+            increment_counter("cohere_rerank_failure")
+            return await self._fallback.rerank(query, candidates)
 
         by_position = list(candidates)
         by_index = {candidate.index: candidate for candidate in candidates}
@@ -133,7 +142,7 @@ class CohereReranker:
                 )
             )
 
-        for result in self._fallback.rerank(query, candidates):
+        for result in await self._fallback.rerank(query, candidates):
             if result.index in seen:
                 continue
             candidate = by_index[result.index]

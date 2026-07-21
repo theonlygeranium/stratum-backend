@@ -7,6 +7,8 @@ from collections import Counter
 from pathlib import Path
 from typing import Protocol
 
+from app.observability import increment_counter, log_event
+
 
 TOKEN_RE = re.compile(r"[a-z0-9][a-z0-9.+#-]*")
 
@@ -61,6 +63,7 @@ class DenseVectorIndex:
         self,
         texts: list[str],
         *,
+        metadatas: list[dict[str, object]] | None = None,
         embedding_provider: EmbeddingProvider,
         vector_store_provider: str,
         chroma_persist_dir: Path | None = None,
@@ -69,6 +72,7 @@ class DenseVectorIndex:
         pinecone_namespace: str | None = None,
     ):
         self.texts = texts
+        self.metadatas = _normalize_metadatas(metadatas, len(texts))
         self.embedding_provider = embedding_provider
         self.vector_store_provider = "memory"
         self._collection = None
@@ -77,7 +81,15 @@ class DenseVectorIndex:
 
         try:
             self._embeddings = embedding_provider.embed_documents(texts)
-        except Exception:
+        except Exception as exc:
+            log_event(
+                "warning",
+                "vector_store_degraded",
+                from_provider=embedding_provider.name,
+                to_provider="hash",
+                error_type=type(exc).__name__,
+            )
+            increment_counter("vector_store_degradation")
             self.embedding_provider = HashEmbeddingProvider()
             self._embeddings = self.embedding_provider.embed_documents(texts)
 
@@ -102,7 +114,15 @@ class DenseVectorIndex:
         if self._collection is not None:
             try:
                 return self._rank_chroma(query_embedding, allowed)
-            except Exception:
+            except Exception as exc:
+                log_event(
+                    "warning",
+                    "vector_store_degraded",
+                    from_provider="chroma",
+                    to_provider="memory",
+                    error_type=type(exc).__name__,
+                )
+                increment_counter("vector_store_degradation")
                 self._collection = None
                 self.vector_store_provider = "memory"
                 return self._rank_memory(query_embedding, indexes)
@@ -115,6 +135,14 @@ class DenseVectorIndex:
         index_name: str | None,
     ) -> None:
         if not api_key or not index_name:
+            log_event(
+                "warning",
+                "vector_store_degraded",
+                from_provider="pinecone",
+                to_provider="chroma",
+                error_type="configuration_missing",
+            )
+            increment_counter("vector_store_degradation")
             self._pinecone_index = None
             return
 
@@ -127,7 +155,7 @@ class DenseVectorIndex:
                 {
                     "id": f"stratum-kb-{position}",
                     "values": embedding,
-                    "metadata": {"index": position},
+                    "metadata": self.metadatas[position],
                 }
                 for position, embedding in enumerate(self._embeddings)
             ]
@@ -138,7 +166,15 @@ class DenseVectorIndex:
                 )
             self._pinecone_index = index
             self.vector_store_provider = "pinecone"
-        except Exception:
+        except Exception as exc:
+            log_event(
+                "warning",
+                "vector_store_degraded",
+                from_provider="pinecone",
+                to_provider="chroma",
+                error_type=type(exc).__name__,
+            )
+            increment_counter("vector_store_degradation")
             self._pinecone_index = None
 
     def _build_chroma(self, persist_dir: Path | None) -> None:
@@ -165,11 +201,19 @@ class DenseVectorIndex:
                     ids=[str(index) for index in missing],
                     documents=[self.texts[index] for index in missing],
                     embeddings=[self._embeddings[index] for index in missing],
-                    metadatas=[{"index": index} for index in missing],
+                    metadatas=[self.metadatas[index] for index in missing],
                 )
             self._collection = collection
             self.vector_store_provider = "chroma"
-        except Exception:
+        except Exception as exc:
+            log_event(
+                "warning",
+                "vector_store_degraded",
+                from_provider="chroma",
+                to_provider="memory",
+                error_type=type(exc).__name__,
+            )
+            increment_counter("vector_store_degradation")
             self._collection = None
             self.vector_store_provider = "memory"
 
@@ -211,7 +255,15 @@ class DenseVectorIndex:
                 include_metadata=True,
                 namespace=self._pinecone_namespace,
             )
-        except Exception:
+        except Exception as exc:
+            log_event(
+                "warning",
+                "vector_store_degraded",
+                from_provider="pinecone",
+                to_provider="memory",
+                error_type=type(exc).__name__,
+            )
+            increment_counter("vector_store_degradation")
             return self._rank_memory(query_embedding, indexes)
 
         ranked: list[tuple[int, float]] = []
@@ -247,7 +299,15 @@ def build_embedding_provider(
                 api_key=openai_api_key,
                 model=embedding_model,
             )
-        except Exception:
+        except Exception as exc:
+            log_event(
+                "warning",
+                "vector_store_degraded",
+                from_provider="openai",
+                to_provider="hash",
+                error_type=type(exc).__name__,
+            )
+            increment_counter("vector_store_degradation")
             pass
     return HashEmbeddingProvider()
 
@@ -274,6 +334,29 @@ def _pinecone_match_score(match: object) -> float:
     else:
         score = getattr(match, "score", 0.0)
     return float(score or 0.0)
+
+
+def _normalize_metadatas(
+    metadatas: list[dict[str, object]] | None,
+    length: int,
+) -> list[dict[str, object]]:
+    normalized: list[dict[str, object]] = []
+    supplied = metadatas or []
+    for index in range(length):
+        metadata = dict(supplied[index]) if index < len(supplied) else {}
+        metadata["index"] = index
+        normalized.append(_sanitize_metadata(metadata))
+    return normalized
+
+
+def _sanitize_metadata(metadata: dict[str, object]) -> dict[str, object]:
+    sanitized: dict[str, object] = {}
+    for key, value in metadata.items():
+        if isinstance(value, str | int | float | bool):
+            sanitized[key] = value
+        elif value is not None:
+            sanitized[key] = str(value)
+    return sanitized
 
 
 def _normalize(vector: list[float]) -> list[float]:

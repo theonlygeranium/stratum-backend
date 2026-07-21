@@ -2,10 +2,12 @@ from __future__ import annotations
 
 import os
 import re
+import uuid
 from collections.abc import AsyncGenerator
 from contextvars import ContextVar
 from typing import Any
 
+from app.cache import SemanticCache
 from app.config import Settings
 from app.escalation import (
     build_payload,
@@ -38,6 +40,7 @@ from app.models import (
     StreamEvent,
     TokenEvent,
 )
+from app.observability import log_event, reset_trace_id, set_trace_id
 from app.prompts import (
     CONFIDENCE_ESCALATION_MESSAGE,
     ESCALATION_PREPARED_MESSAGE,
@@ -81,6 +84,11 @@ class StratumAgent:
         )
         self.session_store = SessionStore(settings.database_url)
         self.low_confidence_counts = self.session_store.memory_counts
+        self._cache = (
+            SemanticCache(ttl_seconds=settings.cache_ttl_seconds)
+            if settings.cache_enabled
+            else None
+        )
         self.graph_runtime = build_stratum_graph(
             database_url=settings.database_url,
             open_handler=self._prepare_open,
@@ -124,6 +132,10 @@ class StratumAgent:
             "allowed_origins_env_configured": os.getenv("ALLOWED_ORIGINS") is not None,
         }
 
+    async def close(self) -> None:
+        if self.graph_runtime is not None:
+            await self.graph_runtime.close()
+
     async def respond(
         self,
         request: ChatRequest,
@@ -150,25 +162,43 @@ class StratumAgent:
         *,
         suppress_notifications: bool = False,
     ) -> AsyncGenerator[StreamEvent, None]:
-        state = initial_state_from_request(request)
-        state.update(route_node(state))
-        mode = route_key(state)
+        trace_id = str(uuid.uuid4())[:8]
+        token = set_trace_id(trace_id)
+        mode = request.mode
+        log_event(
+            "info",
+            "stratum_stream_started",
+            session_id=request.session_id,
+            mode=request.mode,
+        )
+        try:
+            state = initial_state_from_request(request)
+            state.update(route_node(state))
+            mode = route_key(state)
 
-        if mode != "open":
-            async for event in self._stream_result(
-                await self.respond(
-                    request,
-                    suppress_notifications=suppress_notifications,
-                )
+            if mode != "open":
+                async for event in self._stream_result(
+                    await self.respond(
+                        request,
+                        suppress_notifications=suppress_notifications,
+                    )
+                ):
+                    yield event
+                return
+
+            async for event in self._stream_open(
+                request_from_state(state),
+                suppress_notifications=suppress_notifications,
             ):
                 yield event
-            return
-
-        async for event in self._stream_open(
-            request_from_state(state),
-            suppress_notifications=suppress_notifications,
-        ):
-            yield event
+        finally:
+            log_event(
+                "info",
+                "stratum_stream_completed",
+                session_id=request.session_id,
+                mode=mode,
+            )
+            reset_trace_id(token)
 
     async def _stream_open(
         self,
@@ -236,6 +266,17 @@ class StratumAgent:
                     request,
                 ):
                     generated_chunks.append(chunk)
+                    generated_text = "".join(generated_chunks)
+                    capped_text = _truncate_response(
+                        generated_text,
+                        self.settings.llm_max_response_chars,
+                    )
+                    if capped_text != generated_text:
+                        emitted_text = "".join(generated_chunks[:-1])
+                        suffix = capped_text[len(emitted_text) :] or "…"
+                        chunks.append(suffix)
+                        yield TokenEvent(type="token", token=suffix)
+                        break
                     chunks.append(chunk)
                     yield TokenEvent(type="token", token=chunk)
 
@@ -245,6 +286,13 @@ class StratumAgent:
                     async for event in self._stream_text(fallback):
                         yield event
                 response = "".join(chunks)
+                if generated_chunks and self._cache:
+                    self._cache.put(
+                        query,
+                        response,
+                        source.model_dump(mode="json"),
+                        [citation.model_dump(mode="json") for citation in citations],
+                    )
 
                 await self.graph_runtime.checkpoint_result(
                     request,
@@ -282,14 +330,29 @@ class StratumAgent:
             yield DoneEvent(type="done")
             return
 
+        cached = self._cache.get(query) if self._cache else None
+        if cached:
+            source = SourceConfidence.model_validate(cached.source)
+            citations = [
+                RagCitation.model_validate(citation)
+                for citation in cached.citations
+            ]
+            yield PhaseEvent(type="phase", phase="composing")
+            yield SourceEvent(type="source", source=source)
+            async for event in self._stream_text(cached.response):
+                yield event
+            if citations:
+                yield CitationsEvent(type="citations", data=citations)
+            yield DoneEvent(type="done")
+            return
+
         yield PhaseEvent(type="phase", phase="retrieving")
-        retrieval = self.retriever.retrieve(query)
+        retrieval = await self.retriever.retrieve(query)
 
         if not retrieval.source.grounded:
-            count = await self.session_store.get_low_confidence_count(
+            count = await self.session_store.increment_low_confidence_count(
                 request.session_id
-            ) + 1
-            await self.session_store.set_low_confidence_count(request.session_id, count)
+            )
             if count >= 2:
                 yield PhaseEvent(type="phase", phase="escalating")
                 delivery = await self._notify_only(
@@ -333,6 +396,8 @@ class StratumAgent:
         yield TokenEvent(type="token", token=GROUNDING_PREAMBLE)
 
         streamed = False
+        generated_chunks: list[str] = []
+        emitted_chunks: list[str] = []
         async for token in self._stream_grounded_response(
             query,
             retrieval.source,
@@ -340,6 +405,20 @@ class StratumAgent:
             request,
         ):
             streamed = True
+            generated_chunks.append(token)
+            generated_text = "".join(generated_chunks)
+            capped_text = _truncate_response(
+                generated_text,
+                self.settings.llm_max_response_chars,
+            )
+            if capped_text != generated_text:
+                emitted_prefix = "".join(generated_chunks[:-1])
+                suffix = capped_text[len(emitted_prefix) :] or "…"
+                if suffix:
+                    emitted_chunks.append(suffix)
+                    yield TokenEvent(type="token", token=suffix)
+                break
+            emitted_chunks.append(token)
             yield TokenEvent(type="token", token=token)
 
         if not streamed:
@@ -349,6 +428,13 @@ class StratumAgent:
 
         if citations:
             yield CitationsEvent(type="citations", data=citations)
+        if streamed and self._cache:
+            self._cache.put(
+                query,
+                GROUNDING_PREAMBLE + "".join(emitted_chunks),
+                retrieval.source.model_dump(mode="json"),
+                [citation.model_dump(mode="json") for citation in citations],
+            )
         yield DoneEvent(type="done")
 
     async def _stream_result(
@@ -392,13 +478,25 @@ class StratumAgent:
                 )
             )
 
-        retrieval = self.retriever.retrieve(query)
-        if not retrieval.source.grounded:
-            count = (
-                await self.session_store.get_low_confidence_count(request.session_id)
-                + 1
+        cached = self._cache.get(query) if self._cache else None
+        if cached:
+            return state_update_from_result(
+                StratumResult(
+                    phases=["searching", "composing"],
+                    response_text=cached.response,
+                    source=SourceConfidence.model_validate(cached.source),
+                    citations=[
+                        RagCitation.model_validate(citation)
+                        for citation in cached.citations
+                    ],
+                )
             )
-            await self.session_store.set_low_confidence_count(request.session_id, count)
+
+        retrieval = await self.retriever.retrieve(query)
+        if not retrieval.source.grounded:
+            count = await self.session_store.increment_low_confidence_count(
+                request.session_id
+            )
             if count >= 2:
                 result = await self._escalate(request, "confidence")
                 result.phases = ["searching", "retrieving", "escalating"]
@@ -450,10 +548,18 @@ class StratumAgent:
         source = SourceConfidence.model_validate(source_payload)
         context = self._retrieved_context_text(update)
         response = await self._grounded_response(query, source, context, request)
+        citations = self._citations_from_update(update)
+        if self._cache:
+            self._cache.put(
+                query,
+                response,
+                source.model_dump(mode="json"),
+                [citation.model_dump(mode="json") for citation in citations],
+            )
         return StratumResult(
             phases=["searching", "retrieving", "composing"],
             source=source,
-            citations=self._citations_from_update(update),
+            citations=citations,
             response_text=response,
         )
 
@@ -612,7 +718,7 @@ class StratumAgent:
             else ESCALATION_PREPARED_MESSAGE
         )
         parts = [opener, notification_copy]
-        if self.settings.calendly_url:
+        if notification_sent and self.settings.calendly_url:
             parts.append(
                 f"You can also use this scheduling link: {self.settings.calendly_url}"
             )
@@ -676,7 +782,10 @@ class StratumAgent:
         )
 
         if llm_response:
-            return llm_response
+            return _truncate_response(
+                llm_response,
+                self.settings.llm_max_response_chars,
+            )
 
         # Fallback: summarize the retrieved context directly.
         # This is used only when the LLM is unavailable.
@@ -731,71 +840,9 @@ class StratumAgent:
 
     @staticmethod
     def _is_out_of_scope(query: str) -> bool:
-        lowered = query.lower()
-        scope_terms = [
-            "edstratum",
-            "ai",
-            "canvas",
-            "lti",
-            "rag",
-            "llm",
-            "learning",
-            "edtech",
-            "strategy",
-            "implementation",
-            "workflow",
-            "engagement",
-            "process",
-            "services",
-            "service",
-            "project",
-            "data",
-            "jeffrey",
-            "methodology",
-            "roadmap",
-            "roi",
-            "analytics",
-            "automation",
-            "advising",
-            "assessment",
-            "bm25",
-            "chunking",
-            "integration",
-            "grounding",
-            "grounded",
-            "hybrid",
-            "pilot",
-            "consult",
-            "professional",
-            "offer",
-            "retrieval",
-            "semantic",
-            "source confidence",
-            "triage",
-            "vendor",
-            "what do you do",
-            "what does",
-            "tell me about",
-            "about",
-            "help",
-            "how do",
-            "can you",
-            "contact",
-            "schedule",
-            "call",
-            "meeting",
-            "talk",
-            "speak",
-            "connect",
-            "pricing",
-            "cost",
-            "hire",
-            "work with",
-            "engage",
-            "consultation",
-            "discovery",
-        ]
-        return not any(term in lowered for term in scope_terms)
+        from app.scope_guard import is_likely_in_scope
+
+        return not is_likely_in_scope(query)
 
 
 def _citation_excerpt(text: str) -> str:
@@ -810,3 +857,15 @@ def _citation_excerpt(text: str) -> str:
     if len(sentence_boundary) == 2 and len(sentence_boundary[0]) >= 80:
         return f"{sentence_boundary[0]}."
     return f"{cleaned[:CITATION_EXCERPT_LIMIT].rstrip()}..."
+
+
+def _truncate_response(text: str, max_chars: int) -> str:
+    """Truncate generated text at a sentence boundary when possible."""
+    if max_chars <= 0 or len(text) <= max_chars:
+        return text
+    truncated = text[:max_chars]
+    for sep in [". ", "! ", "? ", ".\n", "!\n", "?\n"]:
+        idx = truncated.rfind(sep)
+        if idx > max_chars * 0.5:
+            return truncated[: idx + len(sep)].rstrip() + "…"
+    return truncated.rstrip() + "…"

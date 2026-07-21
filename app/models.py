@@ -25,6 +25,7 @@ class SourceConfidence(ContractModel):
     label: str
     score: float = Field(ge=0.0, le=1.0)
     grounded: bool
+    stale: bool = False
 
 
 class RagCitation(ContractModel):

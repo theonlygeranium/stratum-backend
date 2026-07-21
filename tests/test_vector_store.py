@@ -83,6 +83,18 @@ def test_pinecone_vector_store_upserts_and_ranks(monkeypatch) -> None:
 
     index = DenseVectorIndex(
         ["alpha service", "beta service"],
+        metadatas=[
+            {
+                "source_title": "Alpha Source",
+                "service_area": "canvas",
+                "content_type": "service",
+            },
+            {
+                "source_title": "Beta Source",
+                "service_area": "rag_engineering",
+                "content_type": "methodology",
+            },
+        ],
         embedding_provider=StaticEmbeddingProvider(),
         vector_store_provider="pinecone",
         pinecone_api_key="test-pinecone-key",
@@ -100,6 +112,9 @@ def test_pinecone_vector_store_upserts_and_ranks(monkeypatch) -> None:
         "stratum-kb-1",
     ]
     assert [record["metadata"]["index"] for record in fake_index.records] == [0, 1]
+    assert fake_index.records[0]["metadata"]["source_title"] == "Alpha Source"
+    assert fake_index.records[1]["metadata"]["service_area"] == "rag_engineering"
+    assert fake_index.records[1]["metadata"]["content_type"] == "methodology"
 
     assert index.rank("beta", [0, 1])[0][0] == 1
     assert [result[0] for result in index.rank("beta", [0])] == [0]

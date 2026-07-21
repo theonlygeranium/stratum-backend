@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import html
 import hashlib
+import asyncio
 import json
 import re
 import time
@@ -13,6 +14,7 @@ import httpx
 
 from app.config import Settings
 from app.models import ChatMessage, ChatRequest, EscalationDelivery, ReadinessSnapshot
+from app.observability import increment_counter, log_event
 
 
 RESEND_FALLBACK_FROM_EMAIL = "onboarding@resend.dev"
@@ -229,7 +231,22 @@ def format_email_text(payload: dict[str, Any]) -> str:
     )
 
 
-def _consume_rate_limit(session_id: str) -> bool:
+async def _consume_rate_limit(session_id: str, database_url: str | None) -> bool:
+    if database_url:
+        try:
+            return await asyncio.to_thread(
+                _consume_rate_limit_postgres,
+                session_id,
+                database_url,
+            )
+        except Exception as exc:
+            log_event(
+                "warning",
+                "rate_limiter_postgres_failed",
+                error_type=type(exc).__name__,
+            )
+            increment_counter("rate_limiter_postgres_failures")
+
     now = time.time()
     recent = [
         timestamp
@@ -242,6 +259,40 @@ def _consume_rate_limit(session_id: str) -> bool:
     recent.append(now)
     _ESCALATION_SENDS[session_id] = recent
     return True
+
+
+def _consume_rate_limit_postgres(session_id: str, database_url: str) -> bool:
+    import psycopg
+
+    with psycopg.connect(database_url, connect_timeout=2, autocommit=True) as conn:
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS stratum_rate_limits (
+                session_id TEXT NOT NULL,
+                sent_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+            )
+            """
+        )
+        conn.execute(
+            """
+            DELETE FROM stratum_rate_limits
+            WHERE session_id = %s
+              AND sent_at < NOW() - INTERVAL '1 hour'
+            """,
+            (session_id,),
+        )
+        row = conn.execute(
+            "SELECT COUNT(*) FROM stratum_rate_limits WHERE session_id = %s",
+            (session_id,),
+        ).fetchone()
+        count = int(row[0]) if row else 0
+        if count >= RATE_LIMIT_MAX_EMAILS:
+            return False
+        conn.execute(
+            "INSERT INTO stratum_rate_limits (session_id) VALUES (%s)",
+            (session_id,),
+        )
+        return True
 
 
 def _safe_log_path(log_dir: Path, session_id: Any) -> Path:
@@ -270,6 +321,8 @@ async def send_or_log_escalation(
     log_path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
 
     if suppress_notifications:
+        log_event("info", "escalation_delivery", status="suppressed")
+        increment_counter("escalation_suppressed")
         return EscalationDelivery(
             success=True,
             status="suppressed",
@@ -277,15 +330,19 @@ async def send_or_log_escalation(
         )
 
     if not settings.resend_api_key or not settings.jeffrey_email:
+        log_event("warning", "escalation_delivery", status="prepared")
+        increment_counter("escalation_prepared")
         return EscalationDelivery(
             success=False,
             status="prepared",
             error="notifications_not_configured",
         )
 
-    if not _consume_rate_limit(str(payload["session_id"])):
+    if not await _consume_rate_limit(str(payload["session_id"]), settings.database_url):
         payload["suppressed_reason"] = "rate_limited"
         log_path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+        log_event("warning", "escalation_delivery", status="rate_limited")
+        increment_counter("escalation_rate_limited")
         return EscalationDelivery(
             success=False,
             status="rate_limited",
@@ -324,18 +381,34 @@ async def send_or_log_escalation(
                             message_id = str(data["id"])
                     except Exception:
                         pass
+                    log_event("info", "escalation_delivery", status="sent")
+                    increment_counter("escalation_sent")
                     return EscalationDelivery(
                         success=True,
                         status="sent",
                         messageId=message_id,
                     )
-                except Exception:
+                except Exception as exc:
+                    log_event(
+                        "warning",
+                        "escalation_resend_sender_failed",
+                        status="failed",
+                        sender=sender,
+                        error_type=type(exc).__name__,
+                    )
                     continue
-    except Exception:
-        pass
+    except Exception as exc:
+        log_event(
+            "error",
+            "escalation_resend_failed",
+            status="failed",
+            error_type=type(exc).__name__,
+        )
 
     # Email notification failed, but the escalation was already logged
     # to disk above. Do not crash the user-facing response.
+    log_event("error", "escalation_delivery", status="failed")
+    increment_counter("escalation_failed")
     return EscalationDelivery(
         success=False,
         status="failed",

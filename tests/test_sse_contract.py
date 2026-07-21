@@ -18,6 +18,7 @@ from app.graph import (
 )
 from app.models import (
     ChatRequest,
+    DoneEvent,
     EscalationDelivery,
     PhaseEvent,
     ReadinessSnapshot,
@@ -31,6 +32,8 @@ import app.main as main_module
 @pytest.fixture(autouse=True)
 def _isolate_agent_state(tmp_path):
     main_module.agent.low_confidence_counts.clear()
+    if main_module.agent._cache:
+        main_module.agent._cache.invalidate()
     main_module.agent.session_store.database_url = None
     main_module.agent.session_store._db_disabled = True
     object.__setattr__(main_module.agent.settings, "escalation_log_dir", tmp_path)
@@ -51,6 +54,8 @@ REQUIRED_ORIGINS = [
 def _events(response_text: str) -> list[dict]:
     events = []
     for block in response_text.strip().split("\n\n"):
+        if not block or block.startswith(":"):
+            continue
         assert block.startswith("data: ")
         events.append(json.loads(block.removeprefix("data: ")))
     return events
@@ -147,6 +152,27 @@ def test_sse_event_rejects_invalid_contract_payload() -> None:
         sse_event({"type": "phase", "phase": "thinking"})
 
 
+def test_sse_keepalive_comments_are_emitted_during_slow_stream() -> None:
+    async def slow_events():
+        yield PhaseEvent(type="phase", phase="searching")
+        await asyncio.sleep(0.02)
+        yield DoneEvent(type="done")
+
+    async def collect() -> list[str]:
+        return [
+            item
+            async for item in main_module._stream_with_keepalive(
+                slow_events(),
+                interval_s=0.001,
+            )
+        ]
+
+    chunks = asyncio.run(collect())
+
+    assert ":keepalive\n\n" in chunks
+    assert _events("".join(chunks))[-1]["type"] == "done"
+
+
 def test_open_mode_emits_required_sse_order() -> None:
     events = _post(
         {
@@ -172,7 +198,7 @@ def test_open_mode_emits_required_sse_order() -> None:
     assert events[0]["phase"] == "searching"
     assert events[1]["phase"] == "retrieving"
     assert events[2]["phase"] == "composing"
-    assert set(events[3]["source"]) == {"label", "score", "grounded"}
+    assert set(events[3]["source"]) == {"label", "score", "grounded", "stale"}
     assert isinstance(events[3]["source"]["score"], float | int)
     assert 0 <= events[3]["source"]["score"] <= 1
     first_token_index = next(
@@ -195,6 +221,71 @@ def test_open_mode_emits_required_sse_order() -> None:
         "escalate": None,
     }
     assert any(event.get("type") == "token" for event in events)
+
+
+def test_out_of_scope_query_returns_scope_boundary_message() -> None:
+    events = _post(
+        {
+            "messages": [
+                {
+                    "role": "user",
+                    "content": "What is the best backpacking route in Iceland?",
+                    "timestamp": 0,
+                }
+            ],
+            "mode": "open",
+            "intakeIndex": None,
+            "intakeAnswers": {},
+            "sessionId": "contract-out-of-scope-boundary",
+        }
+    )
+
+    text = "".join(event.get("token", "") for event in events)
+    assert [event["type"] for event in events[:3]] == ["phase", "phase", "source"]
+    assert events[0]["phase"] == "searching"
+    assert events[1]["phase"] == "composing"
+    assert "outside what I focus on" in text
+    assert events[-1]["type"] == "done"
+
+
+def test_repeated_grounded_query_uses_cached_response(monkeypatch) -> None:
+    calls = 0
+
+    async def counted_stream(*args, **kwargs):
+        nonlocal calls
+        del args, kwargs
+        calls += 1
+        yield "cached answer"
+
+    monkeypatch.setattr(
+        main_module.agent,
+        "_stream_grounded_response",
+        counted_stream,
+    )
+    payload = {
+        "messages": [
+            {
+                "role": "user",
+                "content": "How should we plan a Canvas AI pilot?",
+                "timestamp": 0,
+            }
+        ],
+        "mode": "open",
+        "intakeIndex": None,
+        "intakeAnswers": {},
+        "sessionId": "contract-cache-first",
+    }
+
+    first = _post(payload)
+    second = _post({**payload, "sessionId": "contract-cache-second"})
+
+    assert calls == 1
+    assert "cached answer" in "".join(
+        event.get("token", "") for event in first if event["type"] == "token"
+    )
+    assert "cached answer" in "".join(
+        event.get("token", "") for event in second if event["type"] == "token"
+    )
 
 
 def test_agent_stream_reaches_source_before_llm_tokens(monkeypatch) -> None:
@@ -684,8 +775,11 @@ def test_eval_header_suppresses_confidence_escalation_notification(
             "source": SourceConfidence(label="", score=0.0, grounded=False),
         },
     )()
+    async def retrieve(*args, **kwargs):
+        return retrieval
+
     monkeypatch.setattr(main_module.agent, "_notify_only", qa_notify)
-    monkeypatch.setattr(main_module.agent.retriever, "retrieve", lambda _: retrieval)
+    monkeypatch.setattr(main_module.agent.retriever, "retrieve", retrieve)
     main_module.agent.low_confidence_counts["contract-eval-confidence"] = 1
 
     response = client.post(

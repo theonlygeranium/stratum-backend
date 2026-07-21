@@ -39,6 +39,14 @@ class Settings:
     elevenlabs_api_key: str | None
     elevenlabs_voice_id: str
     elevenlabs_base_url: str
+    enable_metrics: bool = True
+    llm_max_tokens: int = 200
+    llm_max_response_chars: int = 1200
+    llm_history_window: int = 6
+    llm_summary_threshold: int = 10
+    enable_scope_judge: bool = False
+    cache_enabled: bool = True
+    cache_ttl_seconds: int = 300
 
 
 def get_settings() -> Settings:
@@ -144,4 +152,15 @@ def get_settings() -> Settings:
             or "JBFqnCBsd6RMkjVDRZzb"
         ),
         elevenlabs_base_url=elevenlabs_base_url,
+        enable_metrics=os.getenv("ENABLE_METRICS", "true").strip().lower()
+        in ("true", "1", "yes"),
+        llm_max_tokens=int(os.getenv("LLM_MAX_TOKENS", "200")),
+        llm_max_response_chars=int(os.getenv("LLM_MAX_RESPONSE_CHARS", "1200")),
+        llm_history_window=int(os.getenv("LLM_HISTORY_WINDOW", "6")),
+        llm_summary_threshold=int(os.getenv("LLM_SUMMARY_THRESHOLD", "10")),
+        enable_scope_judge=os.getenv("ENABLE_SCOPE_JUDGE", "false").strip().lower()
+        in ("true", "1", "yes"),
+        cache_enabled=os.getenv("CACHE_ENABLED", "true").strip().lower()
+        in ("true", "1", "yes"),
+        cache_ttl_seconds=int(os.getenv("CACHE_TTL_SECONDS", "300")),
     )

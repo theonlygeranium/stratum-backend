@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+import asyncio
+import os
 from pathlib import Path
 
 from app.rag.chunker import chunk_documents
 from app.rag.documents import Document, load_knowledge_base
-from app.rag.hybrid import HybridRetriever
+from app.rag.hybrid import HybridRetriever, _is_stale_freshness_date
 
 
 BACKEND_DIR = Path(__file__).resolve().parents[1]
@@ -35,6 +37,43 @@ def test_kb_documents_have_phase_2_metadata() -> None:
         assert all(doc.metadata[key] for key in REQUIRED_METADATA - {"source_url"})
 
 
+def test_front_matter_source_url_preserves_colons(tmp_path: Path) -> None:
+    doc_path = tmp_path / "url-source.md"
+    doc_path.write_text(
+        "\n".join(
+            [
+                "---",
+                "source_title: URL Source",
+                "source_url: https://example.com/path:with:colons",
+                "service_area: general",
+                "content_type: site_copy",
+                "---",
+                "Body text.",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    docs = load_knowledge_base(tmp_path)
+
+    assert docs[0].metadata["source_url"] == "https://example.com/path:with:colons"
+
+
+def test_missing_freshness_date_uses_file_mtime(tmp_path: Path) -> None:
+    doc_path = tmp_path / "mtime-source.md"
+    doc_path.write_text("Body text.", encoding="utf-8")
+    os.utime(doc_path, (1_704_067_200, 1_704_067_200))
+
+    docs = load_knowledge_base(tmp_path)
+
+    assert docs[0].metadata["freshness_date"] == "2024-01-01"
+
+
+def test_old_freshness_date_is_marked_stale() -> None:
+    assert _is_stale_freshness_date("2000-01-01") is True
+    assert _is_stale_freshness_date("not-a-date") is False
+
+
 def test_chunker_preserves_section_metadata() -> None:
     doc = Document(
         content=(
@@ -61,9 +100,11 @@ def test_chunker_preserves_section_metadata() -> None:
 
 
 def test_canvas_lti_query_retrieves_canvas_source() -> None:
-    result = HybridRetriever(KB_DIR).retrieve(
-        "Can you help with Canvas LTI grade passback, Developer Keys, and roster sync?",
-        top_k=5,
+    result = asyncio.run(
+        HybridRetriever(KB_DIR).retrieve(
+            "Can you help with Canvas LTI grade passback, Developer Keys, and roster sync?",
+            top_k=5,
+        )
     )
 
     assert result.source.grounded is True
@@ -77,9 +118,11 @@ def test_canvas_lti_query_retrieves_canvas_source() -> None:
 
 
 def test_ai_roadmap_query_retrieves_strategy_source() -> None:
-    result = HybridRetriever(KB_DIR).retrieve(
-        "How should we build an AI roadmap with ROI, governance, and vendor review?",
-        top_k=5,
+    result = asyncio.run(
+        HybridRetriever(KB_DIR).retrieve(
+            "How should we build an AI roadmap with ROI, governance, and vendor review?",
+            top_k=5,
+        )
     )
 
     assert result.source.grounded is True
@@ -88,9 +131,11 @@ def test_ai_roadmap_query_retrieves_strategy_source() -> None:
 
 
 def test_rag_quality_query_retrieves_rag_source() -> None:
-    result = HybridRetriever(KB_DIR).retrieve(
-        "What makes a RAG system grounded with semantic chunking, BM25, reranking, and confidence?",
-        top_k=5,
+    result = asyncio.run(
+        HybridRetriever(KB_DIR).retrieve(
+            "What makes a RAG system grounded with semantic chunking, BM25, reranking, and confidence?",
+            top_k=5,
+        )
     )
 
     assert result.source.grounded is True
@@ -99,9 +144,11 @@ def test_rag_quality_query_retrieves_rag_source() -> None:
 
 
 def test_intake_query_retrieves_intake_logic() -> None:
-    result = HybridRetriever(KB_DIR).retrieve(
-        "How does STRATUM intake scoring decide high intent and readiness snapshots?",
-        top_k=5,
+    result = asyncio.run(
+        HybridRetriever(KB_DIR).retrieve(
+            "How does STRATUM intake scoring decide high intent and readiness snapshots?",
+            top_k=5,
+        )
     )
 
     assert result.source.grounded is True
@@ -109,9 +156,11 @@ def test_intake_query_retrieves_intake_logic() -> None:
 
 
 def test_ai_adjacent_off_topic_query_stays_low_confidence() -> None:
-    result = HybridRetriever(KB_DIR).retrieve(
-        "Can AI recommend a backpacking route in Iceland?",
-        top_k=5,
+    result = asyncio.run(
+        HybridRetriever(KB_DIR).retrieve(
+            "Can AI recommend a backpacking route in Iceland?",
+            top_k=5,
+        )
     )
 
     assert result.source.grounded is False
@@ -119,9 +168,11 @@ def test_ai_adjacent_off_topic_query_stays_low_confidence() -> None:
 
 
 def test_contact_query_uses_contact_metadata() -> None:
-    result = HybridRetriever(KB_DIR).retrieve(
-        "How do I request escalation to the Founding leadership team?",
-        top_k=5,
+    result = asyncio.run(
+        HybridRetriever(KB_DIR).retrieve(
+            "How do I request escalation to the Founding leadership team?",
+            top_k=5,
+        )
     )
 
     assert result.source.grounded is True

@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-import math
 import re
 from collections import Counter, defaultdict
 from dataclasses import dataclass
+from datetime import datetime
 from pathlib import Path
 
 from rank_bm25 import BM25Okapi
@@ -225,8 +225,10 @@ class HybridRetriever:
             _dense_embedding_text(text, doc.metadata)
             for text, doc in zip(self._doc_text, self.docs, strict=False)
         ]
+        dense_metadatas = [_vector_metadata(doc.metadata) for doc in self.docs]
         self._vector_index = DenseVectorIndex(
             dense_texts,
+            metadatas=dense_metadatas,
             embedding_provider=build_embedding_provider(
                 provider=embedding_provider,
                 openai_api_key=embedding_api_key,
@@ -248,7 +250,7 @@ class HybridRetriever:
         self.reranker_provider = self._reranker.name
         self.reranker_model = self._reranker.model
 
-    def retrieve(self, query: str, top_k: int = 5) -> RetrievalResult:
+    async def retrieve(self, query: str, top_k: int = 5) -> RetrievalResult:
         if not self.docs or not query.strip():
             return RetrievalResult(
                 docs=[],
@@ -260,7 +262,7 @@ class HybridRetriever:
         bm25 = self._rank_bm25(query, candidate_indexes)[:candidate_limit]
         semantic = self._rank_semantic(query, candidate_indexes)[:candidate_limit]
         fused = self._rrf_fusion([bm25, semantic], weights=[0.4, 0.6])
-        reranked = self._rerank(query, fused[:candidate_limit], bm25, semantic)
+        reranked = await self._rerank(query, fused[:candidate_limit], bm25, semantic)
         top = reranked[:top_k]
         docs = [self._document_with_scores(*item) for item in top]
         source = self._source_confidence(query, docs)
@@ -305,7 +307,7 @@ class HybridRetriever:
                 fused[index] += weight / (k + rank)
         return sorted(fused.items(), key=lambda item: (-item[1], item[0]))
 
-    def _rerank(
+    async def _rerank(
         self,
         query: str,
         fused: list[tuple[int, float]],
@@ -343,7 +345,7 @@ class HybridRetriever:
 
         candidate_map = {candidate.index: candidate for candidate in candidates}
         reranked = []
-        for result in self._reranker.rerank(query, candidates):
+        for result in await self._reranker.rerank(query, candidates):
             candidate = candidate_map[result.index]
             reranked.append(
                 (
@@ -421,6 +423,7 @@ class HybridRetriever:
             return SourceConfidence(label="", score=0.0, grounded=False)
         doc = docs[0]
         relevance_score = float(doc.metadata.get("relevance_score", 0.0))
+        stale = _is_stale_freshness_date(doc.metadata.get("freshness_date"))
         score = min(1.0, relevance_score * 1.1 + 0.08)
         if not _query_service_areas(query) and relevance_score < 0.52:
             score = min(score, self.confidence_threshold - 0.03)
@@ -429,6 +432,7 @@ class HybridRetriever:
             label=str(doc.metadata.get("source_title", "EdStratum Knowledge Base")),
             score=score,
             grounded=score >= self.confidence_threshold,
+            stale=stale,
         )
 
 
@@ -457,6 +461,23 @@ def _dense_embedding_text(
         repeats = max(1, min(3, round(count)))
         expanded.extend([feature.replace(":", "_")] * repeats)
     return " ".join(expanded)
+
+
+def _vector_metadata(metadata: dict[str, object]) -> dict[str, object]:
+    return {
+        key: metadata[key]
+        for key in (
+            "source_title",
+            "source_url",
+            "service_area",
+            "content_type",
+            "freshness_date",
+            "chunk_id",
+            "chunk_index",
+            "section_title",
+        )
+        if key in metadata
+    }
 
 
 def _metadata_list_text(value: object) -> str:
@@ -570,6 +591,16 @@ def _metadata_alignment(query: str, metadata: dict[str, object]) -> float:
     return max(area_score, type_score, topic_score)
 
 
+def _is_stale_freshness_date(value: object) -> bool:
+    if not value:
+        return False
+    try:
+        freshness = datetime.strptime(str(value), "%Y-%m-%d")
+    except ValueError:
+        return False
+    return (datetime.now() - freshness).days > 90
+
+
 def _phrase_alignment(query: str, document: str) -> float:
     query_terms = _content_terms(tokenize(query))
     if len(query_terms) < 2:
@@ -587,14 +618,3 @@ def _phrase_alignment(query: str, document: str) -> float:
     if total == 0:
         return 0.0
     return matches / total
-
-
-def _cosine(left: dict[str, float], right: dict[str, float]) -> float:
-    if not left or not right:
-        return 0.0
-    dot = sum(value * right.get(token, 0.0) for token, value in left.items())
-    left_norm = math.sqrt(sum(value * value for value in left.values()))
-    right_norm = math.sqrt(sum(value * value for value in right.values()))
-    if left_norm == 0 or right_norm == 0:
-        return 0.0
-    return dot / (left_norm * right_norm)

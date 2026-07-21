@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass, field
+from datetime import datetime
 from pathlib import Path
 
 
@@ -10,7 +12,7 @@ DEFAULT_METADATA: dict[str, object] = {
     "source_url": "",
     "service_area": "general",
     "content_type": "site_copy",
-    "freshness_date": "2026-07-19",
+    "freshness_date": "",
 }
 
 
@@ -62,6 +64,14 @@ def _parse_metadata_value(key: str, value: str) -> object:
 def _normalize_metadata(path: Path, metadata: dict[str, object]) -> dict[str, object]:
     normalized = dict(DEFAULT_METADATA)
     normalized.update(metadata)
+    if not normalized.get("freshness_date"):
+        try:
+            mtime = os.path.getmtime(path)
+            normalized["freshness_date"] = datetime.fromtimestamp(mtime).strftime(
+                "%Y-%m-%d"
+            )
+        except OSError:
+            normalized["freshness_date"] = ""
     normalized.setdefault("source_title", path.stem.replace("-", " ").title())
 
     for key in ("source_title", "source_url", "service_area", "content_type", "freshness_date"):
@@ -74,9 +84,6 @@ def _normalize_metadata(path: Path, metadata: dict[str, object]) -> dict[str, ob
         normalized["service_area"] = "general"
     if not normalized["content_type"]:
         normalized["content_type"] = "site_copy"
-    if not normalized["freshness_date"]:
-        normalized["freshness_date"] = "2026-07-19"
-
     for key in LIST_METADATA_KEYS:
         value = normalized.get(key)
         if value is None:

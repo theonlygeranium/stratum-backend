@@ -7,6 +7,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 import app.main as main_module
+from app.models import SourceConfidence
 from scripts.eval_deployed_conversations import _answer_substance_check
 from scripts.conversation_scenarios import SCENARIOS, base_payload as _base_payload
 
@@ -18,7 +19,7 @@ def _events(response_text: str) -> list[dict[str, Any]]:
     return [
         json.loads(block.removeprefix("data: "))
         for block in response_text.strip().split("\n\n")
-        if block.strip()
+        if block.strip() and not block.startswith(":")
     ]
 
 
@@ -31,6 +32,8 @@ def _post(payload: dict[str, Any]) -> list[dict[str, Any]]:
 @pytest.fixture(autouse=True)
 def _isolate_agent_state(tmp_path):
     main_module.agent.low_confidence_counts.clear()
+    if main_module.agent._cache:
+        main_module.agent._cache.invalidate()
     main_module.agent.session_store.database_url = None
     main_module.agent.session_store._db_disabled = True
     object.__setattr__(main_module.agent.settings, "escalation_log_dir", tmp_path)
@@ -98,9 +101,25 @@ def test_representative_conversation_matrix(scenario: dict[str, Any]) -> None:
     assert "james" not in text.lower()
 
 
-def test_confidence_escalates_after_two_low_confidence_turns() -> None:
+def test_confidence_escalates_after_two_low_confidence_turns(monkeypatch) -> None:
+    async def low_confidence_retrieve(*args, **kwargs):
+        del args, kwargs
+        return type(
+            "Retrieval",
+            (),
+            {
+                "docs": [],
+                "source": SourceConfidence(label="", score=0.0, grounded=False),
+            },
+        )()
+
+    monkeypatch.setattr(
+        main_module.agent.retriever,
+        "retrieve",
+        low_confidence_retrieve,
+    )
     payload = _base_payload(
-        "Can AI recommend a backpacking route in Iceland?",
+        "How should a Canvas LTI handle orbital grade sync?",
         session_id="matrix-low-confidence-repeat",
     )
 

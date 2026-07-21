@@ -47,7 +47,7 @@ def test_rag_eval_honors_configured_providers(monkeypatch) -> None:
             captured["knowledge_base_dir"] = knowledge_base_dir
             captured.update(kwargs)
 
-        def retrieve(self, query: str, top_k: int):
+        async def retrieve(self, query: str, top_k: int):
             del query, top_k
             return SimpleNamespace(
                 source=SimpleNamespace(
