@@ -146,7 +146,7 @@ def _evaluate_confidence_repeat(
             "messages": [
                 {
                     "role": "user",
-                    "content": "Can AI recommend a backpacking route in Iceland?",
+                    "content": "What is EdStratum Labs office address and legal entity number?",
                     "timestamp": 0,
                 }
             ],
